@@ -8,8 +8,7 @@ import { VulnerabilityExplainer } from './utils/vulnerabilityExplainer';
 import { IgnoreManager } from './utils/ignoreManager';
 
 export function activate(context: vscode.ExtensionContext) {
-    // Extension activated
-    vscode.window.showInformationMessage('CodeShield extension is now active!');
+    // Extension activated silently
 
     // Initialize IgnoreManager
     IgnoreManager.initialize(context);

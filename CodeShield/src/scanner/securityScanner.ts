@@ -795,7 +795,11 @@ export class SecurityScanner {
                     line: lineIndex + 1,
                     column: match.index!,
                     code: match[0],
-                    severity: 'error'
+                    severity: 'error',
+                    fixAction: {
+                        title: 'Apply Java security fix',
+                        replacement: suggestion
+                    }
                 });
             }
         }
@@ -837,7 +841,11 @@ export class SecurityScanner {
                     line: lineIndex + 1,
                     column: match.index!,
                     code: match[0],
-                    severity: 'error'
+                    severity: 'error',
+                    fixAction: {
+                        title: 'Apply C# security fix',
+                        replacement: suggestion
+                    }
                 });
             }
         }
@@ -879,7 +887,11 @@ export class SecurityScanner {
                     line: lineIndex + 1,
                     column: match.index!,
                     code: match[0],
-                    severity: 'error'
+                    severity: 'error',
+                    fixAction: {
+                        title: 'Apply C++ security fix',
+                        replacement: suggestion
+                    }
                 });
             }
         }
@@ -927,7 +939,11 @@ export class SecurityScanner {
                     line: lineIndex + 1,
                     column: match.index!,
                     code: match[0],
-                    severity: 'error'
+                    severity: 'error',
+                    fixAction: {
+                        title: 'Apply PHP security fix',
+                        replacement: suggestion
+                    }
                 });
             }
         }

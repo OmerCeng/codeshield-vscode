@@ -46,7 +46,7 @@ export function activate(context: vscode.ExtensionContext) {
     const scanWorkspaceCommand = vscode.commands.registerCommand('codeshield.scanWorkspace', async () => {
         vscode.window.showInformationMessage('🔍 Scanning workspace for security vulnerabilities...');
         
-        const files = await vscode.workspace.findFiles('**/*.{js,ts,py,java,cs,sql}', '**/node_modules/**');
+        const files = await vscode.workspace.findFiles('**/*.{js,ts,py,java,cs,cpp,c,h,php,sql}', '**/node_modules/**');
         let totalVulnerabilities = 0;
 
         for (const file of files) {
@@ -114,7 +114,7 @@ export function activate(context: vscode.ExtensionContext) {
     );
 
     // Register providers
-    const supportedLanguages = ['javascript', 'typescript', 'python', 'java', 'csharp', 'sql'];
+    const supportedLanguages = ['javascript', 'typescript', 'python', 'java', 'csharp', 'cpp', 'c', 'php', 'sql'];
     
     context.subscriptions.push(
         scanCurrentFileCommand,

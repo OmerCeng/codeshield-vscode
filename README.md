@@ -1,8 +1,6 @@
 # CodeShield 🛡️
 
-**VS Code extension for real-time security vulnerability detection with one-click fixes**
-
-Supports 7 languages: JavaScript, Python, Java, C#, C++, PHP, Go | 15+ vulnerability types | Smart quick fixes
+Automatically detect security vulnerabilities in your code with intelligent fix suggestions.
 
 ## Features
 

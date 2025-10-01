@@ -46,6 +46,9 @@ coverage/
 # Test files
 test-files/
 
+# Screenshots (local only, not for GitHub)
+screenshots/
+
 # Temporary files
 tmp/
 temp/

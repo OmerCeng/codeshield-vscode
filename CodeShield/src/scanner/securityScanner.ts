@@ -294,6 +294,8 @@ export class SecurityScanner {
                 vulnerabilities.push(...this.checkCppVulnerabilities(line, lineIndex));
             } else if (languageId === 'php') {
                 vulnerabilities.push(...this.checkPhpVulnerabilities(line, lineIndex));
+            } else if (languageId === 'go') {
+                vulnerabilities.push(...this.checkGoVulnerabilities(line, lineIndex));
             }
         }
 
@@ -1047,5 +1049,70 @@ export class SecurityScanner {
             return 'Use htmlspecialchars() to escape output: echo htmlspecialchars($_GET["data"])';
         }
         return 'Apply proper input validation and output encoding';
+    }
+
+    // Go-specific vulnerability checks
+    private checkGoVulnerabilities(line: string, lineIndex: number): SecurityVulnerability[] {
+        const vulnerabilities: SecurityVulnerability[] = [];
+        
+        // Go-specific patterns - sadece temel olanları
+        const patterns = [
+            { 
+                regex: /exec\.Command\s*\(\s*[^,)]*\+\s*/g,
+                message: 'Command injection vulnerability detected in Go code.',
+                suggestion: 'Use separate arguments instead of string concatenation.'
+            },
+            { 
+                regex: /db\.Query\s*\(\s*['"]\s*SELECT\s+.*?\s*\+\s*/gi,
+                message: 'SQL injection vulnerability detected in Go database query.',
+                suggestion: 'Use prepared statements with placeholders.'
+            },
+            { 
+                regex: /fmt\.Sprintf\s*\(\s*['"]\s*SELECT\s+.*?%[sdv]/gi,
+                message: 'SQL injection vulnerability detected in Go fmt.Sprintf.',
+                suggestion: 'Avoid fmt.Sprintf for SQL queries. Use prepared statements.'
+            },
+            { 
+                regex: /ioutil\.ReadFile\s*\(\s*[^,)]*\+\s*/g,
+                message: 'Path traversal vulnerability detected in Go file operation.',
+                suggestion: 'Validate file paths and use filepath.Clean().'
+            }
+        ];
+
+        for (const pattern of patterns) {
+            let match;
+            pattern.regex.lastIndex = 0;
+            
+            while ((match = pattern.regex.exec(line)) !== null) {
+                vulnerabilities.push({
+                    type: 'go-vulnerability',
+                    message: pattern.message,
+                    line: lineIndex + 1,
+                    column: match.index,
+                    severity: 'error',
+                    code: match[0],
+                    suggestion: pattern.suggestion,
+                    fixAction: {
+                        title: 'Apply Go security fix',
+                        replacement: this.getGoFix(match[0])
+                    }
+                });
+            }
+        }
+
+        return vulnerabilities;
+    }
+
+    private getGoFix(code: string): string {
+        if (code.includes('exec.Command')) {
+            return 'exec.Command("command", arg1, arg2) // Use separate arguments';
+        } else if (code.includes('db.Query')) {
+            return 'db.Query("SELECT * FROM table WHERE id = ?", userID)';
+        } else if (code.includes('fmt.Sprintf')) {
+            return 'db.Query("SELECT * FROM table WHERE id = ?", userID)';
+        } else if (code.includes('ioutil.ReadFile')) {
+            return 'ioutil.ReadFile(filepath.Clean(safePath))';
+        }
+        return 'Apply secure Go practices';
     }
 }

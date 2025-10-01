@@ -1,6 +1,8 @@
 # CodeShield 🛡️
 
-Automatically detect security vulnerabilities in your code with intelligent fix suggestions.
+**VS Code extension for real-time security vulnerability detection with one-click fixes**
+
+Supports 7 languages: JavaScript, Python, Java, C#, C++, PHP, Go | 15+ vulnerability types | Smart quick fixes
 
 ## Features
 
@@ -25,7 +27,7 @@ CodeShield provides comprehensive security analysis for multiple programming lan
 - Ignore functionality for false positives (❌ Ignore button)
 
 ### 🌐 **Multi-Language Support**
-Supports 6 programming languages with language-specific vulnerability patterns
+Supports 7 programming languages with language-specific vulnerability patterns
 
 | Language | Vulnerabilities Detected |
 |----------|---------------------------|
@@ -35,6 +37,14 @@ Supports 6 programming languages with language-specific vulnerability patterns
 | **C#** | SQL Injection, XSS, Command Injection, Path Traversal, Unsafe Deserialization |
 | **C++** | Buffer Overflow, Format String, Memory Issues, Command Injection, SQL Injection |
 | **PHP** | SQL Injection, XSS, Command Injection, File Inclusion, Path Traversal, Unsafe Deserialization |
+| **Go** | SQL Injection, Command Injection, Path Traversal, API Key Exposure, Memory Safety |
+
+## 📸 **CodeShield in Action**
+
+### Python Security Vulnerability Detection
+![CodeShield detecting Python vulnerabilities](./CodeShield/screenshots/python.png)
+
+*CodeShield automatically detects security issues like SQL injection, pickle deserialization, and unsafe imports in Python code, providing instant feedback and fix suggestions.*
 
 ## Getting Started
 
@@ -131,6 +141,7 @@ CodeShield automatically activates for these file types:
 - `.cs` (C#)
 - `.cpp`, `.c`, `.h` (C/C++)
 - `.php` (PHP)
+- `.go` (Go)
 - `.sql` (SQL files)
 
 ## Known Issues
@@ -138,6 +149,17 @@ CodeShield automatically activates for these file types:
 None at this time. If you encounter any issues, please report them on GitHub.
 
 ## Release Notes
+
+### 0.0.2
+
+Enhanced CodeShield with Go language support and improved security detection.
+
+**New Features:**
+- **Go Language Support** - Full security analysis for Go applications
+- Enhanced SQL injection detection across all languages
+- Improved command injection patterns
+- Better path traversal detection
+- Extended API key pattern recognition
 
 ### 0.0.1
 

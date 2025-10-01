@@ -114,7 +114,7 @@ export function activate(context: vscode.ExtensionContext) {
     );
 
     // Register providers
-    const supportedLanguages = ['javascript', 'typescript', 'python', 'java', 'csharp', 'cpp', 'c', 'php', 'sql'];
+    const supportedLanguages = ['javascript', 'typescript', 'python', 'java', 'csharp', 'cpp', 'c', 'php', 'sql', 'go'];
     
     context.subscriptions.push(
         scanCurrentFileCommand,

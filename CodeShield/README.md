@@ -109,23 +109,6 @@ eval("var result = " + userInput);
 const result = JSON.parse(userInput);
 ```
 
-### Go Security Examples
-```go
-// ❌ Vulnerable - SQL injection in Go
-query := "SELECT * FROM users WHERE id = " + userID
-db.Query(query)
-
-// ✅ Secure - Use prepared statements
-stmt, err := db.Prepare("SELECT * FROM users WHERE id = ?")
-stmt.Query(userID)
-
-// ❌ Vulnerable - Command injection
-cmd := exec.Command("cat", "/path/to/"+userInput)
-
-// ✅ Secure - Use separate arguments
-cmd := exec.Command("cat", userInput)
-```
-
 ## Extension Commands
 
 You can access these commands via Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`):
@@ -162,31 +145,6 @@ CodeShield automatically activates for these file types:
 ## Known Issues
 
 None at this time. If you encounter any issues, please report them on GitHub.
-
-## Release Notes
-
-### 0.0.2
-
-Enhanced CodeShield with Go language support and improved security detection.
-
-**New Features:**
-- **Go Language Support** - Full security analysis for Go applications
-- Enhanced SQL injection detection across all languages
-- Improved command injection patterns
-- Better path traversal detection
-- Extended API key pattern recognition
-
-### 0.0.1
-
-Initial release of CodeShield with comprehensive security vulnerability detection for 6 programming languages.
-
-**Features:**
-- Real-time vulnerability scanning
-- 15+ security vulnerability types detected
-- Smart quick fix suggestions
-- Multi-language support (JavaScript, TypeScript, Python, Java, C#, C++, PHP)
-- Minimalist UI with wavy underlines
-- Detailed vulnerability explanations
 
 ## Contributing
 

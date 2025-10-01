@@ -146,31 +146,6 @@ CodeShield automatically activates for these file types:
 
 None at this time. If you encounter any issues, please report them on GitHub.
 
-## Release Notes
-
-### 0.0.2
-
-Enhanced CodeShield with Go language support and improved security detection.
-
-**New Features:**
-- **Go Language Support** - Full security analysis for Go applications
-- Enhanced SQL injection detection across all languages
-- Improved command injection patterns
-- Better path traversal detection
-- Extended API key pattern recognition
-
-### 0.0.1
-
-Initial release of CodeShield with comprehensive security vulnerability detection for 6 programming languages.
-
-**Features:**
-- Real-time vulnerability scanning
-- 15+ security vulnerability types detected
-- Smart quick fix suggestions
-- Multi-language support (JavaScript, TypeScript, Python, Java, C#, C++, PHP)
-- Minimalist UI with wavy underlines
-- Detailed vulnerability explanations
-
 ## Contributing
 
 We welcome contributions! Please submit issues and pull requests on GitHub.

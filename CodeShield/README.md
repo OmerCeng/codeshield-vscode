@@ -25,7 +25,7 @@ CodeShield provides comprehensive security analysis for multiple programming lan
 - Ignore functionality for false positives (❌ Ignore button)
 
 ### 🌐 **Multi-Language Support**
-Supports 7 programming languages with language-specific vulnerability patterns
+Supports 8 programming languages with language-specific vulnerability patterns
 
 | Language | Vulnerabilities Detected |
 |----------|---------------------------|
@@ -36,13 +36,7 @@ Supports 7 programming languages with language-specific vulnerability patterns
 | **C++** | Buffer Overflow, Format String, Memory Issues, Command Injection, SQL Injection |
 | **PHP** | SQL Injection, XSS, Command Injection, File Inclusion, Path Traversal, Unsafe Deserialization |
 | **Go** | SQL Injection, Command Injection, Path Traversal, API Key Exposure, Memory Safety |
-
-## 📸 **CodeShield in Action**
-
-### Python Security Vulnerability Detection
-![CodeShield detecting Python vulnerabilities](./screenshots/python.png)
-
-*CodeShield automatically detects security issues like SQL injection, pickle deserialization, and unsafe imports in Python code, providing instant feedback and fix suggestions.*
+| **Dart/Flutter** | Debug Info Leaks, Insecure HTTP, Hardcoded API Keys, Path Traversal, Firebase Config Exposure |
 
 ## Getting Started
 
@@ -107,6 +101,27 @@ eval("var result = " + userInput);
 
 // ✅ Secure - Use JSON.parse for data
 const result = JSON.parse(userInput);
+```
+
+### Dart/Flutter Security Issues
+```dart
+// ❌ Vulnerable - Debug info leak
+debugPrint("User password: $password");
+
+// ✅ Secure - Conditional debug with safe info only
+if (kDebugMode) debugPrint("Login successful for user ID: ${user.id}");
+
+// ❌ Vulnerable - Hardcoded API key
+const String apiKey = "sk-1234567890abcdef";
+
+// ✅ Secure - Environment configuration
+const String apiKey = String.fromEnvironment('API_KEY');
+
+// ❌ Vulnerable - Insecure HTTP
+Uri.parse("http://api.example.com/data");
+
+// ✅ Secure - HTTPS only
+Uri.parse("https://api.example.com/data");
 ```
 
 ## Extension Commands

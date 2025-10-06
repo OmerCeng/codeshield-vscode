@@ -5,7 +5,31 @@ All notable changes to the CodeShield extension will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.0.3] - 2025-10-02
+## [0.0.9] 
+
+### Added
+- **Dart/Flutter Language Support**: Comprehensive security vulnerability detection for Flutter applications
+  - Debug information leak detection in `debugPrint()` and `print()` statements
+  - Insecure HTTP detection for production Flutter apps
+  - Hardcoded API key detection (`const String`, `final String` patterns)
+  - Firebase configuration exposure detection (apiKey, databaseURL, messagingSenderId)
+  - Path traversal detection in `File()` and `Directory()` operations
+  - Flutter-specific security patterns and fix suggestions
+- Dart code examples and security best practices in documentation
+- Enhanced multi-language support (now 8 languages total)
+
+### Changed
+- Updated supported languages count from 7 to 8
+- Enhanced README documentation with Dart/Flutter security examples
+- Improved vulnerability type system to include Dart-specific patterns
+- Updated file scanning to include `.dart` files in workspace scans
+
+### Security
+- Added Flutter production security checks
+- Enhanced mobile app security vulnerability detection
+- Improved API key exposure detection for mobile application
+
+## [0.0.3] 
 
 ### Added
 - **Go Language Support**: Complete security vulnerability detection for Go applications
@@ -27,7 +51,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Documentation consistency across all supported languages
 - Vulnerability detection accuracy improvements
 
-## [0.0.2] - 2025-09-28
+## [0.0.2] 
 
 ### Added
 - Enhanced security detection patterns
@@ -40,7 +64,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Enhanced quick fix accuracy
 - Improved documentation structure
 
-## [0.0.1] - 2025-09-27
+## [0.0.1] 
 
 ### Added
 - Initial release of CodeShield

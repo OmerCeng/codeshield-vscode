@@ -1,8 +1,8 @@
 {
-  "name": "vs-CodeShield",
-  "displayName": "vs-CodeShield",
+  "name": "vs-codeshield",
+  "displayName": "vs-codeshield", 
   "description": "A VS Code extension that detects security vulnerabilities like SQL injection and exposed API keys, providing fix suggestions",
-  "version": "0.0.2",
+  "version": "0.0.8",
   "icon": "icon.png",
   "publisher": "vscodecodeshield",
   "license": "MIT",

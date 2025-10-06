@@ -296,6 +296,8 @@ export class SecurityScanner {
                 vulnerabilities.push(...this.checkPhpVulnerabilities(line, lineIndex));
             } else if (languageId === 'go') {
                 vulnerabilities.push(...this.checkGoVulnerabilities(line, lineIndex));
+            } else if (languageId === 'dart') {
+                vulnerabilities.push(...this.checkDartVulnerabilities(line, lineIndex));
             }
         }
 
@@ -1114,5 +1116,106 @@ export class SecurityScanner {
             return 'ioutil.ReadFile(filepath.Clean(safePath))';
         }
         return 'Apply secure Go practices';
+    }
+
+    // Dart-specific vulnerability checks
+    private checkDartVulnerabilities(line: string, lineIndex: number): SecurityVulnerability[] {
+        const vulnerabilities: SecurityVulnerability[] = [];
+
+        // Dart-specific patterns
+        const dartPatterns = [
+            // Debug info leaks in Flutter
+            /debugPrint\s*\(\s*[^)]*(?:password|token|key|secret|api)/gi,
+            /print\s*\(\s*[^)]*(?:password|token|key|secret|api)/gi,
+            
+            // Insecure HTTP in Flutter/Dart
+            /http:\/\/[^"'\s]+/g,
+            /Uri\.parse\s*\(\s*['"]\s*http:/gi,
+            
+            // Hardcoded API keys (Dart style)
+            /const\s+String\s+\w*(?:api|key|secret|token)\w*\s*=\s*['"]/gi,
+            /final\s+String\s+\w*(?:api|key|secret|token)\w*\s*=\s*['"]/gi,
+            
+            // Firebase config exposure
+            /apiKey\s*:\s*['"]/gi,
+            /databaseURL\s*:\s*['"]/gi,
+            /messagingSenderId\s*:\s*['"]/gi,
+            
+            // Unsafe file operations
+            /File\s*\(\s*[^)]*\+/g, // File path concatenation
+            /Directory\s*\(\s*[^)]*\+/g, // Directory path concatenation
+        ];
+
+        dartPatterns.forEach((pattern, index) => {
+            let match;
+            while ((match = pattern.exec(line)) !== null) {
+                vulnerabilities.push({
+                    type: this.getDartVulnerabilityType(index),
+                    message: this.getDartVulnerabilityMessage(index),
+                    line: lineIndex + 1,
+                    column: match.index + 1,
+                    severity: this.getDartVulnerabilitySeverity(index),
+                    code: match[0],
+                    suggestion: this.getDartFix(match[0], index),
+                    fixAction: {
+                        title: `Fix ${this.getDartVulnerabilityType(index)}`,
+                        replacement: this.getDartFix(match[0], index)
+                    }
+                });
+            }
+        });
+
+        return vulnerabilities;
+    }
+
+    private getDartVulnerabilityType(patternIndex: number): 'unsafe-eval' | 'ssrf' | 'api-key' | 'path-traversal' {
+        const types: ('unsafe-eval' | 'ssrf' | 'api-key' | 'path-traversal')[] = [
+            'unsafe-eval', 'unsafe-eval', // Debug prints
+            'ssrf', 'ssrf', // HTTP issues
+            'api-key', 'api-key', // Hardcoded secrets
+            'api-key', 'api-key', 'api-key', // Firebase config
+            'path-traversal', 'path-traversal' // File operations
+        ];
+        return types[patternIndex] || 'unsafe-eval';
+    }
+
+    private getDartVulnerabilityMessage(patternIndex: number): string {
+        const messages = [
+            'Debug information leak: Sensitive data in debugPrint()',
+            'Debug information leak: Sensitive data in print()',
+            'Insecure HTTP: Use HTTPS for production',
+            'Insecure HTTP: Use HTTPS in Uri.parse()',
+            'Hardcoded API key: Store in environment variables',
+            'Hardcoded secret: Use secure configuration',
+            'Firebase API key exposed: Use environment config',
+            'Database URL exposed: Use secure configuration', 
+            'Messaging sender ID exposed: Use environment config',
+            'Path traversal: Unsafe file path construction',
+            'Path traversal: Unsafe directory path construction'
+        ];
+        return messages[patternIndex] || 'Dart security issue detected';
+    }
+
+    private getDartVulnerabilitySeverity(patternIndex: number): 'error' | 'warning' | 'info' {
+        // Debug leaks: warning, HTTP: error, API keys: error, Path traversal: warning
+        return [2, 2, 0, 0, 0, 0, 0, 0, 0, 2, 2][patternIndex] === 0 ? 'error' : 
+               [2, 2, 0, 0, 0, 0, 0, 0, 0, 2, 2][patternIndex] === 2 ? 'warning' : 'error';
+    }
+
+    private getDartFix(code: string, patternIndex: number): string {
+        const fixes = [
+            'Use kDebugMode check: if (kDebugMode) debugPrint("Safe info only")',
+            'Use kDebugMode check: if (kDebugMode) print("Safe info only")', 
+            'Use HTTPS: https://api.example.com',
+            'Use HTTPS: Uri.parse("https://api.example.com")',
+            'Store in environment: const apiKey = String.fromEnvironment("API_KEY")',
+            'Use secure config: Load from secure storage',
+            'Environment config: String.fromEnvironment("FIREBASE_API_KEY")',
+            'Environment config: String.fromEnvironment("DATABASE_URL")',
+            'Environment config: String.fromEnvironment("MESSAGING_SENDER_ID")',
+            'Use path.join() or validate input path',
+            'Use path.join() or validate input directory'
+        ];
+        return fixes[patternIndex] || 'Apply Dart security best practices';
     }
 }

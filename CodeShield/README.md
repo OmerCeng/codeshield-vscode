@@ -103,27 +103,6 @@ eval("var result = " + userInput);
 const result = JSON.parse(userInput);
 ```
 
-### Dart/Flutter Security Issues
-```dart
-// ❌ Vulnerable - Debug info leak
-debugPrint("User password: $password");
-
-// ✅ Secure - Conditional debug with safe info only
-if (kDebugMode) debugPrint("Login successful for user ID: ${user.id}");
-
-// ❌ Vulnerable - Hardcoded API key
-const String apiKey = "sk-1234567890abcdef";
-
-// ✅ Secure - Environment configuration
-const String apiKey = String.fromEnvironment('API_KEY');
-
-// ❌ Vulnerable - Insecure HTTP
-Uri.parse("http://api.example.com/data");
-
-// ✅ Secure - HTTPS only
-Uri.parse("https://api.example.com/data");
-```
-
 ## Extension Commands
 
 You can access these commands via Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`):
@@ -155,6 +134,7 @@ CodeShield automatically activates for these file types:
 - `.cpp`, `.c`, `.h` (C/C++)
 - `.php` (PHP)
 - `.go` (Go)
+- `.dart` (Dart/Flutter)
 - `.sql` (SQL files)
 
 ## Known Issues

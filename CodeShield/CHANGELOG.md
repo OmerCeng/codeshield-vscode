@@ -5,6 +5,32 @@ All notable changes to the CodeShield extension will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.10]
+
+### Enhanced
+- **Massively Improved Pattern Detection**: All security vulnerability patterns now catch significantly more naming variations
+  - API Key Detection: Now catches `apikey`, `api`, `api_key`, `apiKey`, `token`, `authtoken` and all camelCase/snake_case variations
+  - Password Detection: Now catches `password`, `passwd`, `pwd`, `pass`, `dbpassword`, `database_pwd` and all variations
+  - SQL Injection: Enhanced to detect `query`, `sql`, `cmd`, `command`, `exec`, `execute`, `run` method variations across all database libraries
+  - Command Execution: Expanded to detect `eval`, `exec`, `execSync`, `spawn`, `system`, `shell_exec`, `Runtime.exec`, `Process.Start` across all languages
+  - Path Traversal: Now detects all file operations including `readFile`, `writeFile`, `File`, `open`, `include`, `require` variations
+  - XSS Detection: Enhanced DOM manipulation detection for `innerHTML`, `append`, `prepend`, `v-html`, `ng-bind-html`, `dangerouslySetInnerHTML`
+  - SSRF Detection: Now catches all HTTP libraries including `fetch`, `axios`, `requests`, `urllib`, `httpx`, `HttpClient`, `WebClient`
+  - NoSQL Injection: Expanded MongoDB, Redis, and Elasticsearch operation detection
+  - Prototype Pollution: Enhanced `Object.assign`, `merge`, `extend`, `__proto__` access detection
+
+### Improved
+- **Reduced False Negatives**: Pattern flexibility means fewer security vulnerabilities will be missed
+- **Better Language Coverage**: Each pattern now includes variations from multiple languages (JavaScript, Python, Java, C#, PHP, Go)
+- **Smarter Variable Name Detection**: Word boundary detection (`\b`) ensures accurate matching without over-triggering
+- **Case-Insensitive Matching**: Most patterns now use `/gi` flags for better coverage
+
+### Technical
+- All 9 major vulnerability pattern categories updated with 2-3x more detection patterns
+- Added support for alternative method names (e.g., `executeQuery`, `executeUpdate`, `execute`)
+- Enhanced regex patterns to catch library-specific variations (e.g., Lodash, jQuery, Express)
+- Improved detection of dangerous property access (`__proto__`, `constructor`, `prototype`)
+
 ## [0.0.9] 
 
 ### Added

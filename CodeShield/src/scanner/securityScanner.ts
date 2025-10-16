@@ -4,20 +4,23 @@ import { IgnoreManager } from '../utils/ignoreManager';
 
 export class SecurityScanner {
     private sqlInjectionPatterns = [
-        // SQL Injection patterns
+        // SQL Injection patterns - catches various naming conventions
         /['"]\s*\+\s*[a-zA-Z_$][a-zA-Z0-9_$]*\s*\+\s*['"]/g, // String concatenation in SQL
-        /query\s*=\s*['"]\s*SELECT\s+.*?\s*\+\s*/gi,
-        /execute\s*\(\s*['"]\s*SELECT\s+.*?\s*\+\s*/gi,
-        /cursor\.execute\s*\(\s*['"]\s*SELECT\s+.*?\s*%\s*/gi, // Python string formatting
-        /Statement\.executeQuery\s*\(\s*['"]\s*SELECT\s+.*?\s*\+\s*/gi, // Java
-        /SqlCommand\s*\(\s*['"]\s*SELECT\s+.*?\s*\+\s*/gi, // C#
+        /\b(query|sql|cmd|command)\b\s*=\s*['"]\s*(?:SELECT|INSERT|UPDATE|DELETE)\s+.*?\s*\+\s*/gi,
+        /\b(execute|exec|query|run)\b\s*\(\s*['"]\s*(?:SELECT|INSERT|UPDATE|DELETE)\s+.*?\s*\+\s*/gi,
+        /cursor\.\b(execute|exec)\b\s*\(\s*['"]\s*(?:SELECT|INSERT|UPDATE|DELETE)\s+.*?\s*%\s*/gi, // Python string formatting
+        /Statement\.\b(executeQuery|executeUpdate|execute)\b\s*\(\s*['"]\s*(?:SELECT|INSERT|UPDATE|DELETE)\s+.*?\s*\+\s*/gi, // Java
+        /\b(SqlCommand|SqlDataAdapter|MySqlCommand|NpgsqlCommand)\b\s*\(\s*['"]\s*(?:SELECT|INSERT|UPDATE|DELETE)\s+.*?\s*\+\s*/gi, // C# / .NET
+        /db\.\b(query|execute|run|exec|raw)\b\s*\(\s*['"]\s*(?:SELECT|INSERT|UPDATE|DELETE)\s+.*?\s*\+\s*/gi, // Generic DB query
+        /\b(f['"]|\.format\()\s*.*?(?:SELECT|INSERT|UPDATE|DELETE)/gi, // Python f-strings and format
     ];
 
     private apiKeyPatterns = [
-        // Common API key patterns
-        /api[_-]?key\s*[:=]\s*['"][a-zA-Z0-9_-]{20,}['"]/gi,
-        /secret[_-]?key\s*[:=]\s*['"][a-zA-Z0-9_-]{20,}['"]/gi,
-        /access[_-]?token\s*[:=]\s*['"][a-zA-Z0-9_-]{20,}['"]/gi,
+        // Common API key patterns - More flexible to catch variations
+        /\b(api[_-]?key|apikey|api)\b\s*[:=]\s*['"][a-zA-Z0-9_-]{8,}['"]/gi,
+        /\b(secret[_-]?key|secretkey|secret)\b\s*[:=]\s*['"][a-zA-Z0-9_-]{8,}['"]/gi,
+        /\b(access[_-]?token|accesstoken|token)\b\s*[:=]\s*['"][a-zA-Z0-9_-]{8,}['"]/gi,
+        /\b(auth[_-]?token|authtoken)\b\s*[:=]\s*['"][a-zA-Z0-9_-]{8,}['"]/gi,
         /bearer\s+[a-zA-Z0-9_-]{20,}/gi,
         /sk-[a-zA-Z0-9]{20,}/g, // OpenAI API keys
         /pk-[a-zA-Z0-9]{20,}/g, // Stripe public keys
@@ -27,72 +30,81 @@ export class SecurityScanner {
     ];
 
     private hardcodedSecretPatterns = [
-        /password\s*[:=]\s*['"][^'"]{8,}['"]/gi,
-        /pwd\s*[:=]\s*['"][^'"]{8,}['"]/gi,
-        /private[_-]?key\s*[:=]\s*['"]-----BEGIN/gi,
-        /connection[_-]?string\s*[:=]\s*['"].*password=/gi,
+        /\b(password|passwd|pwd|pass)\b\s*[:=]\s*['"][^'"]{4,}['"]/gi,
+        /\b(private[_-]?key|privatekey|pkey)\b\s*[:=]\s*['"]-----BEGIN/gi,
+        /\b(connection[_-]?string|connectionstring|conn[_-]?str)\b\s*[:=]\s*['"].*password=/gi,
+        /\b(db[_-]?password|dbpassword|database[_-]?pwd)\b\s*[:=]\s*['"][^'"]{4,}['"]/gi,
     ];
 
     private unsafeEvalPatterns = [
-        /eval\s*\(/g,
-        /Function\s*\(/g,
-        /setTimeout\s*\(\s*['"][^'"]*['"]\s*,/g,
-        /setInterval\s*\(\s*['"][^'"]*['"]\s*,/g,
-        /execSync\s*\(\s*['"][^'"]*\$\{/g, // Command injection
+        /\beval\s*\(/g,
+        /\bFunction\s*\(/g,
+        /\b(setTimeout|setInterval)\s*\(\s*['"][^'"]*['"]\s*,/g,
+        /\b(exec|execSync|execFile|execFileSync|spawn|spawnSync)\s*\(\s*['"][^'"]*\$\{/g, // Command injection
+        /\b(system|shell_exec|exec|passthru|popen)\s*\(/g, // PHP command execution
+        /\b(Runtime\.getRuntime\(\)\.exec)\s*\(/g, // Java command execution
+        /\b(Process\.Start|ProcessStartInfo)\s*\(/g, // C# process execution
+        /\b(__import__|compile|execfile)\s*\(/g, // Python dynamic imports
     ];
 
     // Path Traversal - File system operations with user input
     private pathTraversalPatterns = [
-        /fs\.readFile\s*\(\s*[^,)]*\+\s*/g, // Node.js fs.readFile with concatenation
-        /fs\.writeFile\s*\(\s*[^,)]*\+\s*/g, // Node.js fs.writeFile with concatenation
-        /require\s*\(\s*[^)]*\+\s*/g, // Dynamic require with user input
-        /res\.sendFile\s*\(\s*[^)]*\+\s*/g, // Express sendFile with concatenation
-        /open\s*\(\s*[^,)]*\+\s*/g, // Python open() with concatenation
-        /readFileSync\s*\(\s*[^,)]*\+\s*/g, // Node.js readFileSync
-        /createReadStream\s*\(\s*[^,)]*\+\s*/g, // Node.js createReadStream
+        /\b(fs\.|filesystem\.|file\.)?(readFile|read|writeFile|write|readFileSync|writeFileSync)\s*\(\s*[^,)]*\+\s*/g, // Node.js fs operations
+        /\b(require|import)\s*\(\s*[^)]*\+\s*/g, // Dynamic require/import with user input
+        /\b(res\.|response\.)?(sendFile|download|send)\s*\(\s*[^)]*\+\s*/g, // Express file operations
+        /\bopen\s*\(\s*[^,)]*\+\s*/g, // Python open() with concatenation
+        /\b(createReadStream|createWriteStream|readdir|readdirSync)\s*\(\s*[^,)]*\+\s*/g, // Node.js stream operations
+        /\b(File|FileReader|FileWriter|FileInputStream|FileOutputStream)\s*\(\s*[^)]*\+\s*/g, // Java file operations
+        /\b(Path\.Combine|File\.ReadAllText|File\.WriteAllText|File\.Open)\s*\(\s*[^)]*\+\s*/g, // C# file operations
+        /\b(include|require|include_once|require_once)\s*\(\s*[^)]*\+\s*/g, // PHP file inclusion
     ];
 
     // XSS - Cross-Site Scripting vulnerabilities
     private xssPatterns = [
-        /\.innerHTML\s*=\s*[^'"]*[\+\$\`]/g, // DOM innerHTML with dynamic content
-        /document\.write\s*\(\s*[^'"]*[\+\$\`]/g, // document.write with variables
-        /\$\(['"]\#[^'"]*['"]\)\.html\s*\(/g, // jQuery html() method
-        /\.append\s*\(\s*[^'"]*[\+\$\`]/g, // DOM append with dynamic content
-        /dangerouslySetInnerHTML/g, // React dangerouslySetInnerHTML
-        /\.insertAdjacentHTML\s*\([^,]*,\s*[^'"]*[\+\$\`]/g, // insertAdjacentHTML
-        /\.outerHTML\s*=\s*[^'"]*[\+\$\`]/g, // outerHTML assignment
+        /\.(innerHTML|innerText|outerHTML)\s*=\s*[^'"]*[\+\$\`]/g, // DOM manipulation with dynamic content
+        /\b(document\.write|document\.writeln)\s*\(\s*[^'"]*[\+\$\`]/g, // document.write with variables
+        /\$\(['"]\#?[^'"]*['"]\)\.\b(html|append|prepend|after|before|replaceWith)\b\s*\(/g, // jQuery DOM methods
+        /\.(append|prepend|after|before|replaceWith)\s*\(\s*[^'"]*[\+\$\`]/g, // DOM manipulation
+        /\bdangerouslySetInnerHTML\b/g, // React dangerouslySetInnerHTML
+        /\.(insertAdjacentHTML|insertAdjacentText|insertAdjacentElement)\s*\([^,]*,\s*[^'"]*[\+\$\`]/g, // Adjacent HTML insertion
+        /\b(v-html|ng-bind-html)\s*=/g, // Vue.js and AngularJS unsafe binding
+        /\{\{\{.*?\}\}\}/g, // Handlebars/Mustache unescaped output
+        /\[innerHTML\]\s*=\s*[^'"]*[\+\$\`]/g, // Angular innerHTML binding
     ];
 
     // SSRF - Server-Side Request Forgery
     private ssrfPatterns = [
-        /fetch\s*\(\s*[^'"]*(?:req\.|request\.|input|user)/g, // fetch() with user input
-        /axios\.(?:get|post|put|delete)\s*\(\s*[^'"]*(?:req\.|request\.|input|user)/g, // Axios with user input
-        /request\s*\(\s*[^'"]*(?:req\.|input|user)/g, // HTTP request library
-        /http\.(?:get|request)\s*\(\s*[^'"]*(?:req\.|input|user)/g, // Node.js http module
-        /urllib\.request\.urlopen\s*\(\s*[^'"]*(?:request\.|input|user)/g, // Python urllib
-        /requests\.(?:get|post)\s*\(\s*[^'"]*(?:request\.|input|user)/g, // Python requests
+        /\b(fetch|Request)\s*\(\s*[^'"]*(?:req\.|request\.|params\.|query\.|body\.|input|user)/g, // fetch() with user input
+        /\b(axios|http|https)\.\b(get|post|put|delete|patch|request)\b\s*\(\s*[^'"]*(?:req\.|request\.|params\.|query\.|body\.|input|user)/g, // HTTP libraries with user input
+        /\b(request|got|superagent|needle)\s*\(\s*[^'"]*(?:req\.|params\.|query\.|body\.|input|user)/g, // HTTP request libraries
+        /\b(urllib|urllib2|urllib3)\.\b(request|urlopen)\b\s*\(\s*[^'"]*(?:request\.|params\.|input|user)/g, // Python urllib
+        /\b(requests|httpx|aiohttp)\.\b(get|post|put|delete|patch|request)\b\s*\(\s*[^'"]*(?:request\.|params\.|input|user)/g, // Python requests
+        /\b(HttpClient|WebClient|RestClient)\.\b(GetAsync|PostAsync|SendAsync)\b\s*\(\s*[^'"]*(?:request\.|input|user)/g, // C# HTTP clients
+        /\b(URL|URI)\s*\(\s*[^'"]*(?:req\.|request\.|params\.|query\.|input|user)/g, // URL construction with user input
     ];
 
     // NoSQL Injection - MongoDB and other NoSQL databases
     private nosqlInjectionPatterns = [
-        /db\.[a-zA-Z]+\.find\s*\(\s*\{[^}]*req\./g, // MongoDB find with req object
-        /\.find\s*\(\s*\{[^}]*\$where/g, // MongoDB $where operator
-        /\$where\s*:\s*[^'"]*[\+\$]/g, // $where with string concatenation
-        /\.find\s*\(\s*req\.(?:body|query|params)/g, // Direct request object in find
-        /\.findOne\s*\(\s*req\.(?:body|query|params)/g, // Direct request object in findOne
-        /client\.search\s*\(\s*\{[^}]*req\./g, // Elasticsearch with request object
+        /\b(db|collection|model)\.[a-zA-Z]+\.\b(find|findOne|findMany|update|updateOne|updateMany|delete|deleteOne|deleteMany)\b\s*\(\s*\{[^}]*(?:req\.|request\.|params\.|query\.|body\.)/g, // MongoDB operations with req object
+        /\.\b(find|findOne|findMany)\b\s*\(\s*\{[^}]*\$where/g, // MongoDB $where operator
+        /\$where\s*:\s*[^'"]*[\+\$\`]/g, // $where with string concatenation
+        /\.\b(find|findOne|findMany)\b\s*\(\s*(?:req\.|request\.|params\.|query\.)(?:body|query|params)/g, // Direct request object in find
+        /\b(client|index)\.\b(search|query)\b\s*\(\s*\{[^}]*(?:req\.|request\.|params\.|query\.)/g, // Elasticsearch with request object
+        /\b(redis|cache)\.\b(get|set|hget|hset)\b\s*\(\s*(?:req\.|request\.|params\.|input)/g, // Redis injection
+        /\b(collection|table)\.\b(where|filter)\b\s*\(\s*(?:req\.|request\.|params\.|query\.)/g, // Generic NoSQL where/filter
     ];
 
     // Prototype Pollution - JavaScript object manipulation
     private prototypePollutionPatterns = [
-        /Object\.assign\s*\([^,]*,\s*(?:req\.|user|input)/g, // Object.assign with user input
-        /_\.merge\s*\([^,]*,\s*(?:req\.|user|input)/g, // Lodash merge
-        /\$\.extend\s*\([^,]*,\s*(?:req\.|user|input)/g, // jQuery extend
-        /JSON\.parse\s*\(\s*(?:req\.|user|input)/g, // JSON.parse without validation
-        /\.deepMerge\s*\([^,]*,\s*(?:req\.|user|input)/g, // Deep merge operations
-        /\[\s*['"]__proto__['"]\s*\]/g, // Direct __proto__ access
-        /\[\s*['"]constructor['"]\s*\]/g, // Constructor access
-        /\[\s*['"]prototype['"]\s*\]/g, // Prototype access
+        /\b(Object)\.\b(assign|create|defineProperty|defineProperties|setPrototypeOf)\b\s*\([^,]*,\s*(?:req\.|request\.|params\.|query\.|body\.|user|input)/g, // Object methods with user input
+        /\b(_|lodash)\.\b(merge|mergeWith|defaultsDeep|extend|assign)\b\s*\([^,]*,\s*(?:req\.|request\.|params\.|query\.|body\.|user|input)/g, // Lodash merge
+        /\$\.\b(extend|merge)\b\s*\([^,]*,\s*(?:req\.|request\.|params\.|query\.|body\.|user|input)/g, // jQuery extend
+        /\b(JSON)\.\b(parse)\b\s*\(\s*(?:req\.|request\.|params\.|query\.|body\.|user|input)/g, // JSON.parse without validation
+        /\.\b(deepMerge|deepExtend|deepAssign)\b\s*\([^,]*,\s*(?:req\.|request\.|params\.|query\.|body\.|user|input)/g, // Deep merge operations
+        /\[\s*(?:['"]__proto__['"]|`__proto__`)\s*\]/g, // Direct __proto__ access
+        /\[\s*(?:['"]constructor['"]|`constructor`)\s*\]\s*\[\s*(?:['"]prototype['"]|`prototype`)\s*\]/g, // Constructor prototype access
+        /\.\b(__proto__|constructor|prototype)\b\s*=/g, // Direct prototype assignment
+        /\b(set|put|extend)\b\s*\(\s*[^,]*,\s*['"](__proto__|constructor|prototype)['"]/g, // Setting dangerous properties
     ];
 
     // ReDoS - Regular Expression Denial of Service

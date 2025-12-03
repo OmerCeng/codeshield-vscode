@@ -49,10 +49,52 @@ Supports 8 programming languages with language-specific vulnerability patterns
 ### Usage
 1. **Open any supported code file** - CodeShield activates automatically
 2. **View security issues** - Vulnerabilities appear as colored wavy underlines
-3. **Get details** - Hover over highlighted code for explanations
-4. **Apply fixes** - Click the 💡 light bulb for quick fixes
-5. **Ignore warnings** - Use ❌ Ignore button to hide specific vulnerabilities
-6. **Manual scan** - Use Command Palette (Ctrl+Shift+P) → "CodeShield: Scan Current File for Security Issues"
+3. **Save your file (Cmd+S)** - 🆕 Automatic notification appears for critical issues
+4. **Click "View All"** - 🆕 Opens interactive dashboard showing all vulnerabilities
+5. **Click any issue** - 🆕 Instantly navigates to the vulnerable code location
+6. **Get details** - Hover over highlighted code for explanations
+7. **Apply fixes** - Click the 💡 light bulb for quick fixes
+8. **Ignore warnings** - Use ❌ Ignore button to hide specific vulnerabilities
+9. **Manual scan** - Use Command Palette (Ctrl+Shift+P) → "CodeShield: Scan Current File for Security Issues"
+10. **🆕 Analyze code snippets** - Select any code block → Right-click → "Analyze Selected Code for Security Issues"
+
+## What's New in v0.0.11
+
+### ✨ New Features
+
+#### 🎯 Interactive Vulnerability Dashboard
+Beautiful, clickable interface for managing security issues:
+- **Auto-appears on save**: When critical vulnerabilities are detected, you'll see a notification
+- **Click "View All"**: Opens a professional side-panel with all critical issues
+- **Visual organization**: Color-coded badges, clear line numbers, and code snippets
+- **One-click navigation**: Click any vulnerability to jump directly to its location
+- **Smart filtering**: Shows only critical (error-level) issues to reduce noise
+- **Clean UI**: Hover effects, smooth transitions, and organized layout
+
+**How it works:**
+1. Save a file with security issues (Cmd+S)
+2. See notification: "🔴 Found X critical security issue(s)"
+3. Click "View All" button
+4. Interactive panel opens showing all issues
+5. Click any issue to navigate to the exact code location
+
+#### 🔍 Code Snippet Risk Analyzer
+Quick security analysis for selected code:
+- **No new windows**: Results appear in current editor
+- **Select and scan**: Highlight code → Right-click → "Analyze Selected Code"
+- **Instant results**: Shows vulnerability count and details
+- **Quick navigation**: "View Details" button jumps to first issue
+- **Perfect for code reviews**: Check security without full file scans
+
+#### 📈 Massively Expanded Detection Patterns
+All vulnerability detectors have been significantly enhanced:
+- **Java**: +15 patterns (SSRF, Reflection abuse, XXE, LDAP injection)
+- **C#**: +20 patterns (LDAP, XXE, SSRF, improved deserialization)
+- **C++**: +12 patterns (Integer overflow, Race conditions, TOCTOU)
+- **PHP**: +15 patterns (File upload, Open redirect, XXE)
+- **Python**: Enhanced subprocess, builtins, input validation detection
+- **Go**: Complete new pattern set for all major vulnerabilities
+- **ReDoS**: 6 additional dangerous regex patterns
 
 ## Examples
 
@@ -111,12 +153,19 @@ You can access these commands via Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P
 |---------|-------------|
 | `CodeShield: Scan Current File for Security Issues` | Manually scan the active file for vulnerabilities |
 | `CodeShield: Scan Workspace for Security Issues` | Scan all files in the current workspace |
+| `CodeShield: Analyze Selected Code for Security Issues` 🆕 | Analyze only the selected code snippet for vulnerabilities |
 | `CodeShield: Explain Security Vulnerability` | Open detailed explanation for selected vulnerability |
 | `CodeShield: Ignore Security Vulnerability` | Add vulnerability to ignore list |
 
 ## Configuration
 
 CodeShield works out of the box with no configuration required. All scanning happens automatically when you open supported file types.
+
+### Optional Settings
+
+CodeShield works great with default settings. Notifications automatically appear for critical issues only.
+
+**Note**: Automatic notifications are enabled by default and show only critical (error-level) vulnerabilities when you save files. This helps you stay aware of serious security issues without overwhelming you with alerts.
 
 ## Requirements
 
@@ -134,6 +183,7 @@ CodeShield automatically activates for these file types:
 - `.cpp`, `.c`, `.h` (C/C++)
 - `.php` (PHP)
 - `.go` (Go)
+- `.dart` (Dart/Flutter)
 - `.sql` (SQL files)
 
 ## Known Issues

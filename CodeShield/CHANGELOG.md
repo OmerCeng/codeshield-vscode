@@ -5,6 +5,46 @@ All notable changes to the CodeShield extension will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.11]
+
+### Added
+- **Interactive Vulnerability Dashboard**: Beautiful side-panel view for all critical security issues
+  - Automatically shows on file save when critical vulnerabilities are detected
+  - Click "View All" in notification to open interactive dashboard
+  - Lists all critical issues with line numbers, types, and code snippets
+  - Click any vulnerability to instantly navigate to its location in code
+  - Clean, professional UI with color-coded severity indicators
+
+- **Smart Code Snippet Analyzer**: Analyze selected code without opening new windows
+  - Right-click on selected code → "Analyze Selected Code for Security Issues"
+  - Scans only the selected portion of your file
+  - Shows results inline without disrupting your workflow
+  - Perfect for quick security checks during code reviews
+  - "View Details" button navigates directly to first vulnerability
+
+- **Auto-Notification for Critical Issues**: Automatic alerts for high-risk vulnerabilities
+  - Pop-up notifications appear automatically when saving files with critical issues
+  - Shows count and brief summary of detected vulnerabilities
+  - "View All" opens detailed interactive dashboard
+  - "Dismiss" closes notification without interrupting work
+  - Only alerts for severity: 'error' level issues (reduces notification noise)
+
+### Enhanced
+- **Massively Expanded Security Patterns**: All vulnerability detectors significantly improved
+  - **Java**: Added 15+ new patterns for SSRF, reflection abuse, XXE, LDAP injection
+  - **C#**: Added 20+ patterns for LDAP, XXE, SSRF, improved deserialization detection
+  - **C++**: Added 12+ patterns for integer overflow, race conditions, TOCTOU vulnerabilities
+  - **PHP**: Added 15+ patterns for file upload, open redirect, XXE, improved injection detection
+  - **Python**: Added subprocess shell injection, builtins manipulation, unvalidated input detection
+  - **Go**: Complete pattern set for SQL injection, command injection, path traversal, SSRF, unsafe reflection
+  - **ReDoS**: Added 6 new dangerous regex patterns including backreference alternation
+  - All patterns now include more method variations and library-specific functions
+
+### Improved
+- Better detection of vulnerability variations across different coding styles
+- Enhanced notification system with actionable buttons (Fix Now, Ignore, Details)
+- Improved user experience with context-aware features
+
 ## [0.0.10]
 
 ### Enhanced

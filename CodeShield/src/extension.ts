@@ -6,6 +6,7 @@ import { SecurityDecorationProvider } from './providers/decorationProvider';
 import { SecurityCodeLensProvider } from './providers/codeLensProvider';
 import { VulnerabilityExplainer } from './utils/vulnerabilityExplainer';
 import { IgnoreManager } from './utils/ignoreManager';
+import { NotificationService } from './utils/notificationService';
 
 export function activate(context: vscode.ExtensionContext) {
     // Extension activated silently
@@ -40,6 +41,9 @@ export function activate(context: vscode.ExtensionContext) {
             diagnosticProvider.updateDiagnostics(document, vulnerabilities);
             decorationProvider.updateDecorations(editor, vulnerabilities);
             codeLensProvider.refresh();
+            
+            // Send notifications for critical vulnerabilities
+            await NotificationService.notifyMultipleVulnerabilities(vulnerabilities, document);
         }
     });
 
@@ -67,7 +71,17 @@ export function activate(context: vscode.ExtensionContext) {
     });
 
     const explainVulnerabilityCommand = vscode.commands.registerCommand('codeshield.explainVulnerability', 
-        (vulnerability: any) => {
+        async (vulnerability: any) => {
+            // If we have a document URI, navigate to the vulnerability location
+            const editor = vscode.window.activeTextEditor;
+            if (editor && vulnerability.line) {
+                const position = new vscode.Position(vulnerability.line - 1, vulnerability.column || 0);
+                const range = new vscode.Range(position, position);
+                
+                editor.selection = new vscode.Selection(position, position);
+                editor.revealRange(range, vscode.TextEditorRevealType.InCenter);
+            }
+            
             VulnerabilityExplainer.explainVulnerability(vulnerability);
         }
     );
@@ -113,6 +127,50 @@ export function activate(context: vscode.ExtensionContext) {
         }
     );
 
+    const analyzeSelectionCommand = vscode.commands.registerCommand('codeshield.analyzeSelection', async () => {
+        const editor = vscode.window.activeTextEditor;
+        if (!editor) {
+            vscode.window.showWarningMessage('No active editor found');
+            return;
+        }
+
+        const selection = editor.selection;
+        if (selection.isEmpty) {
+            vscode.window.showInformationMessage('Please select code to analyze');
+            return;
+        }
+
+        const selectedText = editor.document.getText(selection);
+        const startLine = selection.start.line;
+        
+        // Scan the selected text directly without creating a new document
+        const lines = selectedText.split('\n');
+        const vulnerabilities = securityScanner.scanDocument(editor.document)
+            .filter(v => v.line > startLine && v.line <= startLine + lines.length);
+        
+        if (vulnerabilities.length === 0) {
+            vscode.window.showInformationMessage('✅ No security vulnerabilities found in selected code');
+        } else {
+            // Show detailed results
+            const results = vulnerabilities.map(v => 
+                `• Line ${v.line}: ${v.type.replace('-', ' ').toUpperCase()}\n  ${v.message}`
+            ).join('\n\n');
+            
+            vscode.window.showWarningMessage(
+                `⚠️ Found ${vulnerabilities.length} security issue(s) in selection:\n\n${results}`,
+                'View Details'
+            ).then(action => {
+                if (action === 'View Details' && vulnerabilities.length > 0) {
+                    // Navigate to first vulnerability
+                    const firstVuln = vulnerabilities[0];
+                    const position = new vscode.Position(firstVuln.line - 1, firstVuln.column || 0);
+                    editor.selection = new vscode.Selection(position, position);
+                    editor.revealRange(new vscode.Range(position, position), vscode.TextEditorRevealType.InCenter);
+                }
+            });
+        }
+    });
+
     // Register providers
     const supportedLanguages = ['javascript', 'typescript', 'python', 'java', 'csharp', 'cpp', 'c', 'php', 'sql', 'go'];
     
@@ -122,13 +180,17 @@ export function activate(context: vscode.ExtensionContext) {
         explainVulnerabilityCommand,
         ignoreVulnerabilityCommand,
         applyQuickFixCommand,
+        analyzeSelectionCommand,
         vscode.languages.registerCodeActionsProvider(supportedLanguages, codeActionProvider),
         vscode.languages.registerCodeLensProvider(supportedLanguages, codeLensProvider),
         // Auto-scan on file save
-        vscode.workspace.onDidSaveTextDocument((document: vscode.TextDocument) => {
+        vscode.workspace.onDidSaveTextDocument(async (document: vscode.TextDocument) => {
             if (supportedLanguages.includes(document.languageId)) {
                 const vulnerabilities = securityScanner.scanDocument(document);
                 diagnosticProvider.updateDiagnostics(document, vulnerabilities);
+                
+                // Send notification for critical vulnerabilities
+                await NotificationService.notifyMultipleVulnerabilities(vulnerabilities, document);
             }
         }),
         // Auto-update on text change

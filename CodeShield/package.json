@@ -2,7 +2,7 @@
   "name": "vs-codeshield",
   "displayName": "vs-CodeShield", 
   "description": "A VS Code extension that detects security vulnerabilities like SQL injection and exposed API keys, providing fix suggestions",
-  "version": "0.0.10",
+  "version": "0.0.11",
   "icon": "icon.png",
   "publisher": "vscodecodeshield",
   "license": "MIT",
@@ -56,6 +56,11 @@
         "command": "codeshield.ignoreVulnerability",
         "title": "Ignore Security Vulnerability",
         "category": "CodeShield"
+      },
+      {
+        "command": "codeshield.analyzeSelection",
+        "title": "Analyze Selected Code for Security Issues",
+        "category": "CodeShield"
       }
     ],
     "menus": {
@@ -63,6 +68,11 @@
         {
           "command": "codeshield.scanCurrentFile",
           "group": "navigation"
+        },
+        {
+          "command": "codeshield.analyzeSelection",
+          "group": "navigation",
+          "when": "editorHasSelection"
         }
       ],
       "explorer/context": [
@@ -89,6 +99,56 @@
           "type": "boolean",
           "default": false,
           "description": "Enable automatic fix suggestions"
+        },
+        "codeshield.notifications": {
+          "type": "object",
+          "default": {
+            "showPopup": true,
+            "minSeverity": "warning",
+            "playSound": false
+          },
+          "description": "Notification rules for security vulnerabilities",
+          "properties": {
+            "vulnerabilityTypes": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "sql-injection",
+                  "api-key",
+                  "hardcoded-secret",
+                  "unsafe-eval",
+                  "path-traversal",
+                  "xss",
+                  "ssrf",
+                  "nosql-injection",
+                  "prototype-pollution",
+                  "command-injection"
+                ]
+              },
+              "description": "Only notify for these vulnerability types (empty = all types)"
+            },
+            "minSeverity": {
+              "type": "string",
+              "enum": ["info", "warning", "error"],
+              "default": "warning",
+              "description": "Minimum severity level to show notifications"
+            },
+            "showPopup": {
+              "type": "boolean",
+              "default": true,
+              "description": "Show popup notifications for vulnerabilities"
+            },
+            "playSound": {
+              "type": "boolean",
+              "default": false,
+              "description": "Flash status bar for critical vulnerabilities"
+            },
+            "customMessage": {
+              "type": "string",
+              "description": "Custom notification message template (use {type} and {message} placeholders)"
+            }
+          }
         }
       }
     }

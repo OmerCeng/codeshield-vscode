@@ -116,132 +116,199 @@ export class SecurityScanner {
         /\/\[[a-zA-Z\-]+\]\+\*/g, // Character class with nested quantifiers
         /\/\.\*\.\*/g, // Multiple .* patterns
         /\/\([^)]*\{[0-9]+,\}\)\+/g, // Nested quantifiers with explicit counts
+        /\b(new\s+)?RegExp\s*\(\s*[^)]*\(\w*\+\)\+/g, // Dynamic regex with nested quantifiers
+        /\/\(.+\|\1\)+\//g, // Backreference alternation
+        /\/\(\[\^\]\]*\)\*\(\[\^\]\]*\)\*/g, // Multiple negated character classes
+        /\/\w\{\d+,\}\+/g, // Large min quantifier with +
+        /\/\(\?:\w+\)\*/g, // Non-capturing group with *
     ];
 
     // Python-specific patterns
     private pythonUnsafePatterns = [
-        /pickle\.loads?\s*\(/g, // Pickle deserialization
-        /yaml\.load\s*\(/g, // Unsafe YAML loading (should use safe_load)
-        /eval\s*\(/g, // Python eval
-        /exec\s*\(/g, // Python exec
-        /compile\s*\(/g, // Code compilation
+        /\b(pickle|cPickle|dill)\.(loads?|Unpickler)\s*\(/g, // Pickle deserialization (all variants)
+        /\byaml\.(load|unsafe_load|full_load)\s*\(/g, // Unsafe YAML loading (should use safe_load)
+        /\b(eval|exec|execfile)\s*\(/g, // Python eval/exec
+        /\bcompile\s*\(/g, // Code compilation
         /\.__import__\s*\(/g, // Dynamic imports
-        /getattr\s*\([^,]*,\s*[^'"]*[\+\$]/g, // Dynamic attribute access
+        /\bgetattr\s*\([^,]*,\s*[^'"]*[\+\$]/g, // Dynamic attribute access
+        /\b(os\.)?system\s*\(/g, // OS system calls
+        /\bsubprocess\.(call|run|Popen)\s*\([^)]*shell\s*=\s*True/g, // Shell injection
+        /\bimportlib\.import_module\s*\([^)]*\+/g, // Dynamic module import
+        /\b__builtins__\[/g, // Builtins manipulation
+        /\binput\s*\(\)\s*(?!.*(?:strip|lower|upper|replace|validate))/g, // Unvalidated input
     ];
 
     // Java-specific patterns
     private javaVulnerabilityPatterns = [
         // SQL Injection
-        /Statement\.executeQuery\s*\(\s*['"]\s*SELECT\s+.*?\s*\+\s*/gi,
-        /PreparedStatement\.setString\s*\(\s*\d+\s*,\s*[^)]*\+\s*/gi,
-        /createQuery\s*\(\s*['"]\s*SELECT\s+.*?\s*\+\s*/gi, // JPA
+        /\b(Statement|PreparedStatement)\.(executeQuery|executeUpdate|execute)\s*\(\s*['"]\s*(?:SELECT|INSERT|UPDATE|DELETE)\s+.*?\s*\+\s*/gi,
+        /\bPreparedStatement\.setString\s*\(\s*\d+\s*,\s*[^)]*\+\s*/gi,
+        /\bcreateQuery\s*\(\s*['"]\s*(?:SELECT|INSERT|UPDATE|DELETE)\s+.*?\s*\+\s*/gi, // JPA
+        /\b(entityManager|session)\.createNativeQuery\s*\([^)]*\+/gi, // Native queries
         // Command Injection
-        /Runtime\.getRuntime\(\)\.exec\s*\([^)]*\+/gi,
-        /ProcessBuilder\s*\([^)]*\+/gi,
+        /\bRuntime\.getRuntime\(\)\.exec\s*\([^)]*\+/gi,
+        /\bProcessBuilder\s*\([^)]*\+/gi,
+        /\bnew\s+ProcessBuilder\s*\(\s*(?:Arrays\.asList)?\s*\([^)]*\+/gi,
         // Path Traversal
-        /new\s+File\s*\([^)]*\+/gi,
-        /Files\.readAllBytes\s*\([^)]*\+/gi,
-        /FileInputStream\s*\([^)]*\+/gi,
+        /\bnew\s+File\s*\([^)]*\+/gi,
+        /\bFiles\.(readAllBytes|readAllLines|newInputStream|newOutputStream)\s*\([^)]*\+/gi,
+        /\b(FileInputStream|FileOutputStream|FileReader|FileWriter)\s*\([^)]*\+/gi,
         // Deserialization
-        /ObjectInputStream\s*\(/gi,
-        /readObject\s*\(\s*\)/gi,
+        /\bObjectInputStream\s*\(/gi,
+        /\breadObject\s*\(\s*\)/gi,
+        /\bXMLDecoder\.readObject/gi,
         // LDAP Injection
-        /DirContext\.search\s*\([^)]*\+/gi,
+        /\bDirContext\.(search|lookup)\s*\([^)]*\+/gi,
+        /\bLdapContext\.search\s*\([^)]*\+/gi,
         // XPath Injection
-        /XPath\.evaluate\s*\([^)]*\+/gi,
+        /\bXPath\.(evaluate|compile)\s*\([^)]*\+/gi,
         // XXE
-        /DocumentBuilderFactory\.newInstance\s*\(\s*\)/gi,
-        /SAXParserFactory\.newInstance\s*\(\s*\)/gi,
+        /\bDocumentBuilderFactory\.newInstance\s*\(\s*\)(?!.*setFeature)/gi,
+        /\bSAXParserFactory\.newInstance\s*\(\s*\)(?!.*setFeature)/gi,
+        /\bXMLInputFactory\.newInstance\s*\(\s*\)(?!.*setProperty)/gi,
+        // SSRF
+        /\bnew\s+URL\s*\([^)]*request\./gi,
+        /\bHttpURLConnection\.openConnection\s*\([^)]*\+/gi,
+        // Reflection abuse
+        /\bClass\.forName\s*\([^)]*\+/gi,
+        /\bMethod\.invoke\s*\([^,]*,\s*[^)]*\+/gi,
     ];
 
     // C# specific patterns
     private csharpVulnerabilityPatterns = [
         // SQL Injection
-        /SqlCommand\s*\(\s*['"]\s*SELECT\s+.*?\s*\+\s*/gi,
-        /ExecuteReader\s*\(\s*['"]\s*SELECT\s+.*?\s*\+\s*/gi,
-        /query\s*\+=\s*['"]/gi,
+        /\b(SqlCommand|MySqlCommand|NpgsqlCommand|OracleCommand)\s*\(\s*['"]\s*(?:SELECT|INSERT|UPDATE|DELETE)\s+.*?\s*\+\s*/gi,
+        /\b(ExecuteReader|ExecuteNonQuery|ExecuteScalar)\s*\(\s*['"]\s*(?:SELECT|INSERT|UPDATE|DELETE)\s+.*?\s*\+\s*/gi,
+        /\bquery\s*\+=\s*['"](?:SELECT|INSERT|UPDATE|DELETE)/gi,
+        /\bCommandText\s*=\s*[^;]*\+/gi,
         // Command Injection
-        /Process\.Start\s*\([^)]*\+/gi,
-        /cmd\.exe.*?\+/gi,
+        /\bProcess\.Start\s*\([^)]*\+/gi,
+        /\bProcessStartInfo\s*\([^)]*\+/gi,
+        /\bcmd\.exe.*?\+/gi,
+        /\bpowershell\.exe.*?\+/gi,
         // Path Traversal
-        /File\.ReadAllText\s*\([^)]*\+/gi,
-        /File\.OpenRead\s*\([^)]*\+/gi,
-        /Path\.Combine\s*\([^)]*Request\./gi,
+        /\bFile\.(ReadAllText|ReadAllBytes|ReadAllLines|OpenRead|OpenWrite|Create)\s*\([^)]*\+/gi,
+        /\bDirectory\.(GetFiles|GetDirectories|CreateDirectory)\s*\([^)]*\+/gi,
+        /\bPath\.Combine\s*\([^)]*(?:Request\.|HttpContext\.|User)/gi,
+        /\bFileStream\s*\([^)]*\+/gi,
         // Deserialization
-        /BinaryFormatter\.Deserialize/gi,
-        /JsonConvert\.DeserializeObject\s*</gi,
+        /\bBinaryFormatter\.Deserialize/gi,
+        /\bJsonConvert\.DeserializeObject\s*</gi,
+        /\bXmlSerializer\.Deserialize/gi,
+        /\bDataContractSerializer/gi,
         // XSS
-        /Html\.Raw\s*\(/gi,
-        /Response\.Write\s*\([^)]*Request\./gi,
+        /\bHtml\.Raw\s*\(/gi,
+        /\bResponse\.Write\s*\([^)]*(?:Request\.|User)/gi,
+        /\b@Html\.Raw\s*\(/gi,
         // LDAP Injection
-        /DirectorySearcher\s*\([^)]*\+/gi,
+        /\bDirectorySearcher\s*\([^)]*\+/gi,
+        /\bDirectoryEntry\s*\([^)]*\+/gi,
         // XXE
-        /XmlDocument\.Load\s*\(/gi,
-        /XDocument\.Load\s*\(/gi,
+        /\bXmlDocument\.Load\s*\((?!.*XmlReaderSettings)/gi,
+        /\bXDocument\.Load\s*\((?!.*LoadOptions)/gi,
+        /\bXmlReader\.Create\s*\(\s*[^,)]*\s*(?:,\s*null)?\s*\)/gi,
+        // SSRF
+        /\bnew\s+WebClient\s*\(\).*?\.(?:Download|Upload)\w+\s*\([^)]*(?:Request\.|User)/gi,
+        /\bHttpClient\s*\(\).*?\.(?:GetAsync|PostAsync)\s*\([^)]*\+/gi,
     ];
 
     // C++ specific patterns
     private cppVulnerabilityPatterns = [
         // Buffer Overflow
-        /strcpy\s*\(/gi,
-        /strcat\s*\(/gi,
-        /sprintf\s*\(/gi,
-        /gets\s*\(/gi,
-        /scanf\s*\([^)]*%s/gi,
+        /\b(strcpy|strcat|sprintf|vsprintf|gets|scanf|sscanf|fscanf)\s*\(/gi,
+        /\bstrcpy_s\s*\([^,]*,\s*[^,]*,\s*(?!sizeof)/gi, // strcpy_s with hardcoded size
+        /\bstrncpy\s*\([^,]*,\s*[^,]*,\s*sizeof\s*\([^)]*\)\s*\+/gi, // strncpy with wrong size
+        /\bmemcpy\s*\([^,]*,\s*[^,]*,\s*[^)]*\+/gi, // memcpy with calculated size
         // Memory Issues
-        /malloc\s*\([^)]*\+/gi,
-        /free\s*\([^)]*\)/gi, // Check for use-after-free patterns
+        /\bmalloc\s*\([^)]*\+/gi,
+        /\balloca\s*\(/gi, // Stack allocation (dangerous)
+        /\b(new|delete)\s+(?!\[).*?;.*?\1/gi, // Double free/delete patterns
+        /\bdelete\s+(?!\[)[^;]*;.*?\1/gi, // Use after delete
+        /\brealloc\s*\([^,]*,\s*[^)]*\+/gi,
         // Command Injection
-        /system\s*\([^)]*\+/gi,
-        /popen\s*\([^)]*\+/gi,
-        /execve\s*\([^)]*\+/gi,
+        /\b(system|popen|execve|execl|execlp|execle|execv|execvp|execvpe)\s*\([^)]*\+/gi,
         // File Operations
-        /fopen\s*\([^)]*\+/gi,
-        /ifstream\s*\([^)]*\+/gi,
+        /\b(fopen|freopen|open|creat)\s*\([^)]*\+/gi,
+        /\b(ifstream|ofstream|fstream)\s*\([^)]*\+/gi,
         // Format String
-        /printf\s*\(\s*[^"'][^,)]*\)/gi, // printf without format string
-        /fprintf\s*\([^,]*,\s*[^"'][^,)]*\)/gi,
+        /\b(printf|fprintf|sprintf|snprintf|vprintf|vfprintf|vsprintf|vsnprintf)\s*\(\s*[^"'][^,)]*\)/gi, // printf without format string
+        /\b(printf|fprintf)\s*\([^,]*,\s*[^"'][^,)]*\)/gi,
         // SQL (if using C++ database libraries)
-        /mysql_query\s*\([^)]*\+/gi,
-        /sqlite3_exec\s*\([^)]*\+/gi,
+        /\bmysql_query\s*\([^)]*\+/gi,
+        /\bsqlite3_exec\s*\([^)]*\+/gi,
+        /\bPQexec\s*\([^)]*\+/gi, // PostgreSQL
+        // Integer Overflow
+        /\bstatic_cast<(?:int|unsigned|long|short)>\s*\([^)]*\+[^)]*\*/gi,
+        // Race Conditions
+        /\baccess\s*\(.*?fopen/gi, // TOCTOU
+        /\bstat\s*\(.*?(?:open|fopen)/gi,
     ];
 
     // PHP specific patterns  
     private phpVulnerabilityPatterns = [
         // SQL Injection
-        /mysql_query\s*\(\s*['"]\s*SELECT\s+.*?\$_/gi,
-        /mysqli_query\s*\([^)]*\$_/gi,
-        /\$pdo->query\s*\([^)]*\$_/gi,
-        /\$wpdb->get_results\s*\([^)]*\$_/gi, // WordPress
+        /\b(mysql_query|mysqli_query|pg_query|mssql_query)\s*\(\s*['"]\s*(?:SELECT|INSERT|UPDATE|DELETE)\s+.*?\$_/gi,
+        /\bmysqli_query\s*\([^)]*\$_(?:GET|POST|REQUEST|COOKIE)/gi,
+        /\$(?:pdo|db|conn)->(?:query|exec|prepare)\s*\([^)]*\$_/gi,
+        /\$wpdb->(?:get_results|get_var|query)\s*\([^)]*\$_/gi, // WordPress
         // Command Injection
-        /exec\s*\([^)]*\$_/gi,
-        /system\s*\([^)]*\$_/gi,
-        /shell_exec\s*\([^)]*\$_/gi,
-        /passthru\s*\([^)]*\$_/gi,
-        /proc_open\s*\([^)]*\$_/gi,
+        /\b(exec|system|passthru|shell_exec|popen|proc_open|pcntl_exec)\s*\([^)]*\$_/gi,
+        /\bbackticks.*?\$_/gi, // Backtick execution
         // File Inclusion
-        /include\s*\([^)]*\$_/gi,
-        /require\s*\([^)]*\$_/gi,
-        /include_once\s*\([^)]*\$_/gi,
-        /require_once\s*\([^)]*\$_/gi,
+        /\b(include|require|include_once|require_once)\s*\([^)]*\$_/gi,
+        /\b(fopen|file_get_contents|readfile|file|parse_ini_file)\s*\([^)]*\$_/gi,
         // Path Traversal
-        /file_get_contents\s*\([^)]*\$_/gi,
-        /readfile\s*\([^)]*\$_/gi,
-        /fopen\s*\([^)]*\$_/gi,
-        // Code Injection
-        /eval\s*\([^)]*\$_/gi,
-        /assert\s*\([^)]*\$_/gi,
-        /create_function\s*\([^)]*\$_/gi,
-        // Deserialization
-        /unserialize\s*\([^)]*\$_/gi,
+        /\b(fopen|file_get_contents|readfile|unlink|rmdir|copy|rename)\s*\([^)]*\$_/gi,
+        /\b(move_uploaded_file)\s*\([^,]*,\s*[^)]*\$_/gi,
         // XSS
-        /echo\s+\$_/gi,
-        /print\s+\$_/gi,
+        /\becho\s+\$_(?:GET|POST|REQUEST|COOKIE)(?!.*?htmlspecialchars)/gi,
+        /\bprint\s+\$_(?:GET|POST|REQUEST|COOKIE)(?!.*?htmlspecialchars)/gi,
+        /\b<\?=\s*\$_(?:GET|POST|REQUEST|COOKIE)(?!.*?htmlspecialchars)/gi,
+        // Deserialization
+        /\bunserialize\s*\(\s*\$_/gi,
+        // Code Injection
+        /\beval\s*\(\s*\$_/gi,
+        /\bassert\s*\(\s*\$_/gi,
+        /\bcreate_function\s*\([^)]*\$_/gi,
+        /\bpreg_replace\s*\(.*?\/e['"].*?\$_/gi, // preg_replace with /e modifier
         // LDAP Injection
-        /ldap_search\s*\([^)]*\$_/gi,
+        /\bldap_search\s*\([^)]*\$_/gi,
         // XXE
-        /simplexml_load_string\s*\([^)]*\$_/gi,
-        /DOMDocument::loadXML\s*\([^)]*\$_/gi,
+        /\bsimplexml_load_(?:string|file)\s*\(\s*\$_(?!.*?LIBXML_NOENT)/gi,
+        /\b(?:new\s+)?DOMDocument\s*\(\).*?load(?:XML)?\s*\(\s*\$_/gi,
+        // File Upload
+        /\bmove_uploaded_file\s*\([^)]*\$_FILES.*?(?!.*?\.(?:jpg|png|gif|pdf))/gi,
+        // Open Redirect
+        /\bheader\s*\(['"]Location:\s*['"]\s*\.\s*\$_/gi,
+    ];
+
+    // Go specific patterns
+    private goVulnerabilityPatterns = [
+        // SQL Injection
+        /\b(db|conn)\.(Query|QueryRow|Exec|QueryContext|ExecContext)\s*\([^)]*\+/gi,
+        /\b(db|conn)\.Prepare\s*\([^)]*\+/gi,
+        // Command Injection
+        /\bexec\.Command\s*\([^)]*\+/gi,
+        /\bexec\.CommandContext\s*\([^,]*,\s*[^)]*\+/gi,
+        // Path Traversal
+        /\b(os\.Open|ioutil\.ReadFile|os\.ReadFile)\s*\([^)]*\+/gi,
+        /\bos\.OpenFile\s*\([^)]*\+/gi,
+        /\bfilepath\.Join\s*\([^)]*(?:r\.|req\.|request\.)/gi,
+        // SSRF
+        /\bhttp\.(Get|Post|Head|PostForm)\s*\([^)]*(?:r\.|req\.|request\.)/gi,
+        /\bhttp\.NewRequest\s*\([^,]*,\s*[^)]*(?:r\.|req\.|request\.)/gi,
+        // Unsafe Reflection
+        /\breflect\.(ValueOf|TypeOf)\s*\([^)]*(?:userInput|req\.)/gi,
+        // Template Injection
+        /\btemplate\.(New|ParseFiles|ParseGlob)\s*\([^)]*\+/gi,
+        // YAML Deserialization
+        /\byaml\.Unmarshal\s*\([^,]*(?:req\.|request\.)/gi,
+        // XML External Entity
+        /\bxml\.Unmarshal\s*\([^,]*(?:req\.|request\.)/gi,
+        // Memory Issues
+        /\bunsafe\.Pointer/gi,
+        // Race Conditions
+        /\bgo\s+func\s*\([^)]*\)\s*\{[^}]*(?:shared|global)Variable/gi,
     ];
 
     // Template injection patterns

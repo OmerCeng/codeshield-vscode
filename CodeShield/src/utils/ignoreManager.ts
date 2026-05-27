@@ -76,6 +76,34 @@ export class IgnoreManager {
     }
     
     /**
+     * Adds every vulnerability in the list to the ignore list in one write.
+     * Skips entries that are already ignored.
+     */
+    static async addAllToIgnoreList(
+        document: vscode.TextDocument,
+        vulnerabilities: Array<{ line: number; type: string }>
+    ): Promise<void> {
+        const workspaceState = this.getWorkspaceState();
+        const ignored = workspaceState.get<IgnoredVulnerability[]>(this.IGNORE_KEY, []);
+        const fileUri = document.uri.toString();
+        const now = Date.now();
+
+        for (const vuln of vulnerabilities) {
+            const alreadyIgnored = ignored.some(
+                item =>
+                    item.fileUri === fileUri &&
+                    item.line === vuln.line &&
+                    item.vulnerabilityType === vuln.type
+            );
+            if (!alreadyIgnored) {
+                ignored.push({ fileUri, line: vuln.line, vulnerabilityType: vuln.type, ignoredAt: now });
+            }
+        }
+
+        await workspaceState.update(this.IGNORE_KEY, ignored);
+    }
+
+    /**
      * Get all ignored vulnerabilities
      */
     static getIgnoredList(): IgnoredVulnerability[] {

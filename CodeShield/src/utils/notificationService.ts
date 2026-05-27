@@ -148,15 +148,15 @@ export class NotificationService {
             }
         );
         
-        const fileName = document.fileName.split('/').pop();
+        const fileName = this.escapeHtml(document.fileName.split('/').pop() ?? '');
         const vulnerabilityItems = vulnerabilities.map((v, index) => `
             <div class="vuln-item" onclick="navigateToLine(${v.line}, ${v.column || 0})">
                 <div class="vuln-header">
                     <span class="vuln-number">#${index + 1}</span>
-                    <span class="vuln-type">${v.type.toUpperCase().replace(/-/g, ' ')}</span>
+                    <span class="vuln-type">${this.escapeHtml(v.type.toUpperCase().replace(/-/g, ' '))}</span>
                     <span class="vuln-location">Line ${v.line}</span>
                 </div>
-                <div class="vuln-message">${v.message}</div>
+                <div class="vuln-message">${this.escapeHtml(v.message)}</div>
                 <div class="vuln-code"><code>${this.escapeHtml(v.code)}</code></div>
             </div>
         `).join('');

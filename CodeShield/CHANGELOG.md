@@ -5,7 +5,89 @@ All notable changes to the CodeShield extension will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.0.11]
+## [0.1.0] - 2026-05-27
+
+### Added
+
+- **Status Bar Provider** — live vulnerability counter always visible at the bottom of the screen
+  - Shows `$(shield) CodeShield: N critical | N warnings` format
+  - Red background for critical issues, yellow for warnings-only
+  - Click to open the Problems panel instantly
+  - Updates on every scan, save, and editor switch
+
+- **Hover "Why is this dangerous?" Tooltips** — hover any flagged line for a full explanation
+  - CWE / OWASP reference number for the vulnerability type
+  - Real-world attack scenario describing how the issue gets exploited
+  - Impact description of what an attacker can achieve
+  - Available for all 12+ vulnerability types
+
+- **Secure Code Autocomplete** — suggests safe alternatives while you type
+  - Triggers on `cursor.execute(`, `db.query(`, `innerHTML`, `yaml.load(`, `subprocess.run(`, and 10+ more
+  - Each suggestion includes a documentation note and a secure code snippet
+  - Language-filtered (Python snippets only shown in Python files, etc.)
+
+- **Secret Detection in Comments** — catches credentials left in `//`, `#`, `/* */` comments
+  - Detects API keys, passwords, tokens, and bearer tokens in comment lines
+  - Flags OpenAI `sk-`, AWS `AKIA`, GitHub `ghp_` tokens specifically
+  - Severity: error — assume the credential is already compromised
+
+- **Ignore All in File** — suppress all active issues in one click
+  - `$(eye-closed) Ignore All in This File` CodeLens at the top of every file with issues
+  - Ignored items remain visible as `[Ignored] TYPE — message` in the Problems panel (Information level)
+  - Ignore state persists across sessions per workspace using `workspaceState`
+
+- **Ruby language support** — dedicated vulnerability scanner for Ruby/Rails
+  - SQL injection via ActiveRecord string interpolation (`where`, `find_by_sql`)
+  - Command injection via shell string interpolation (`system`, `exec`, backtick)
+  - `eval` detection
+  - Unsafe deserialization: `Marshal.load`, `YAML.load` with user input
+  - Path traversal: `File.read(params[...])`
+  - SSRF: `Kernel#open` with user-controlled URL
+  - Dynamic method dispatch: `.send(params[...])`
+  - Hardcoded secrets
+  - Inline template XSS: `render inline:`
+
+- **Kotlin/Android language support** — dedicated vulnerability scanner for Kotlin
+  - SQL injection: `rawQuery` with string concatenation
+  - WebView JavaScript enabled with intent-loaded URL
+  - Command injection: `Runtime.getRuntime().exec`
+  - Sensitive data in logcat: `Log.d/e/w` with password/token/key
+  - Hardcoded credentials in source
+  - `MODE_WORLD_READABLE` SharedPreferences
+  - Plain HTTP URLs (not HTTPS)
+  - `setAllowFileAccess(true)` WebView configuration
+  - Java deserialization via `ObjectInputStream`
+
+### Improved
+
+- **Pattern optimizations across all languages**
+  - SQL injection: added JS/TS template literal detection (`` `SELECT...${var}` ``)
+  - API keys: all naming styles now case-insensitive (`ApiKey`, `API_KEY`, `api-key`, `apikey`)
+  - API keys: added GitLab (`glpat-`), Slack (`xox*`), Stripe (`sk_live_`/`pk_live_`)
+  - API keys: fixed GitHub token length from exact `{36}` to `{30,}` for real-world tokens
+  - API keys: added `client_secret`, `private_key` variable name detection
+  - Hardcoded secrets: added PEM private key detection, JWT secret pattern, backtick string support
+  - Command injection: `execSync("cmd" + var)` and `spawn(path + var)` now detected
+  - Path traversal: `readFileSync(req.query.file)` (direct user input, no concat required) now detected
+  - All patterns updated to support backtick template strings alongside single/double quotes
+
+- **Duplicate warning deduplication** — same vulnerability type on the same line now produces exactly one diagnostic
+  - Uses `"line:type"` Map key instead of position-tolerance comparison
+  - Prefers the entry with a fix action when deduplicating
+
+- **Language-aware fix suggestions** — `getSqlInjectionFix`, `getApiKeyFix`, `getSecretFix`, `getUnsafeEvalFix` all use `currentLanguageId` to return the correct idiom for Python, Java, C#, PHP, Go, or JavaScript
+
+- **Shared scanner instance** — `SecurityScanner` is now instantiated once in `extension.ts` and injected into all providers; eliminates triple-scanning on every document change
+
+- **CodeLens memory leak fix** — `onDidChangeCodeLensesEmitter` now properly disposed via `dispose()` method
+
+- **Race condition fix** — `onDidChangeTextDocument` callback resolves the active editor from `vscode.window.visibleTextEditors` at callback time rather than capturing a stale closure reference
+
+- **Quick fix safety** — all fix actions now copy to clipboard only (`copySafeExample`) instead of applying edits that could break user code
+
+- **Activation events** — changed from `"*"` (activate on every file) to specific `onLanguage:*` entries for each supported language; faster VS Code startup
+
+### [0.0.11]
 
 ### Added
 - **Interactive Vulnerability Dashboard**: Beautiful side-panel view for all critical security issues

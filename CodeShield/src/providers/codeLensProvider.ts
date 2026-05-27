@@ -3,8 +3,9 @@ import { SecurityVulnerability } from '../types/vulnerability';
 import { SecurityScanner } from '../scanner/securityScanner';
 
 export class SecurityCodeLensProvider implements vscode.CodeLensProvider {
-    private securityScanner = new SecurityScanner();
     private vulnerabilities: SecurityVulnerability[] = [];
+
+    constructor(private securityScanner: SecurityScanner) {}
 
     provideCodeLenses(document: vscode.TextDocument, token: vscode.CancellationToken): vscode.CodeLens[] {
         const codeLenses: vscode.CodeLens[] = [];
@@ -28,14 +29,14 @@ export class SecurityCodeLensProvider implements vscode.CodeLensProvider {
             });
             codeLenses.push(securityLens);
 
-            // Quick fix lens (if available)
+            // Copy safe example to clipboard (never modifies the file)
             if (vulnerability.fixAction) {
-                const fixLens = new vscode.CodeLens(range, {
-                    title: `🔧 ${vulnerability.fixAction.title}`,
-                    command: 'codeshield.applyQuickFix',
-                    arguments: [document.uri, vulnerability]
+                const copyLens = new vscode.CodeLens(range, {
+                    title: `$(clippy) Copy Safe Example`,
+                    command: 'codeshield.copySafeExample',
+                    arguments: [vulnerability]
                 });
-                codeLenses.push(fixLens);
+                codeLenses.push(copyLens);
             }
 
             // Ignore lens (compact)
@@ -47,13 +48,21 @@ export class SecurityCodeLensProvider implements vscode.CodeLensProvider {
             codeLenses.push(ignoreLens);
         }
 
-        // Add summary lens at top of file if vulnerabilities exist
         if (this.vulnerabilities.length > 0) {
             const summaryRange = new vscode.Range(0, 0, 0, 0);
+
             const summaryLens = new vscode.CodeLens(summaryRange, {
-                title: `🚨 ${this.vulnerabilities.length} Security Issue${this.vulnerabilities.length > 1 ? 's' : ''} Found - Click to scan workspace`,
-                command: 'codeshield.scanWorkspace'
+                title: `🚨 ${this.vulnerabilities.length} security issue${this.vulnerabilities.length > 1 ? 's' : ''} found`,
+                command: 'codeshield.scanCurrentFile',
             });
+
+            const ignoreAllLens = new vscode.CodeLens(summaryRange, {
+                title: `$(eye-closed) Ignore All in This File`,
+                command: 'codeshield.ignoreAllInFile',
+                arguments: [document],
+            });
+
+            codeLenses.unshift(ignoreAllLens);
             codeLenses.unshift(summaryLens);
         }
 
@@ -78,6 +87,10 @@ export class SecurityCodeLensProvider implements vscode.CodeLensProvider {
 
     refresh() {
         this.onDidChangeCodeLensesEmitter.fire();
+    }
+
+    dispose() {
+        this.onDidChangeCodeLensesEmitter.dispose();
     }
 
     private onDidChangeCodeLensesEmitter = new vscode.EventEmitter<void>();

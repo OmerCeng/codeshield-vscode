@@ -1,204 +1,143 @@
 # CodeShield 🛡️
 
-Automatically detect security vulnerabilities in your code with intelligent fix suggestions.
+A VS Code extension that detects security vulnerabilities in real time across 12 programming languages, with hover explanations, secure code autocomplete, and a persistent ignore system.
+
+[![Version](https://img.shields.io/badge/version-0.1.0-blue.svg)](https://marketplace.visualstudio.com/items?itemName=vscodecodeshield.vs-codeshield)
+[![VS Code](https://img.shields.io/badge/VS%20Code-1.74%2B-blue.svg)](https://code.visualstudio.com/)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+
+## What's New in v0.1.0
+
+- **Status Bar** — live vulnerability counter at the bottom of the screen
+- **Hover Tooltips** — hover any flagged line for attack scenario, CWE reference, and fix hint
+- **Secure Autocomplete** — type a dangerous pattern and get the safe version suggested
+- **Comment Secret Scanning** — catches credentials left inside `//` / `#` / `/* */` comments
+- **Ignore All in File** — suppress all issues in one click; they remain visible as hints
+- **Ruby support** — ActiveRecord injection, Marshal.load, YAML.load, SSRF, eval, hardcoded secrets
+- **Kotlin/Android support** — rawQuery, WebView JS, Runtime.exec, sensitive logcat, plain HTTP
+- **Pattern improvements** — template literal SQL, execSync concat, GitLab/Slack tokens, case-insensitive API key matching
 
 ## Features
 
-CodeShield provides comprehensive security analysis for multiple programming languages with real-time vulnerability detection and automated fix suggestions.
+### 🔍 Vulnerability Detection
 
-### 🔍 **Security Vulnerability Detection**
-- **SQL Injection** - Detects unsafe database queries and string concatenation
-- **Cross-Site Scripting (XSS)** - Identifies script injection vulnerabilities  
-- **Command Injection** - Finds OS command execution risks
-- **Path Traversal** - Catches directory traversal attacks
-- **API Key Exposure** - Locates hardcoded secrets and tokens
-- **Unsafe Deserialization** - Spots object injection risks
-- **Buffer Overflow** - Identifies memory boundary violations (C++)
-- **And 8+ more vulnerability types**
+| Category | What's detected |
+|----------|----------------|
+| SQL Injection | String concat, template literals, f-strings, `.format()`, raw queries |
+| XSS | innerHTML, document.write, jQuery `.html()`, dangerouslySetInnerHTML, Vue `v-html`, Angular `[innerHTML]` |
+| Command Injection | eval, exec, execSync, spawn, Runtime.exec, Process.Start, shell_exec |
+| Path Traversal | fs operations, File(), open(), include/require, direct user input |
+| API Keys & Secrets | OpenAI, AWS, GitHub, GitLab, Slack, Stripe, Google OAuth, JWT, PEM keys |
+| Secrets in Comments | Keys/tokens left in TODO/FIXME/remove-me comments |
+| Unsafe Deserialization | pickle, Marshal.load, YAML.load, ObjectInputStream, BinaryFormatter |
+| SSRF | fetch, axios, requests, urllib, HttpClient, http.Get with user-controlled URLs |
+| NoSQL Injection | MongoDB find/update/delete, $where, Elasticsearch, Redis |
+| Prototype Pollution | Object.assign, _.merge, $.extend, `__proto__` access |
+| Buffer Overflow | strcpy, sprintf, gets, scanf (C/C++) |
+| ReDoS | Nested quantifiers, catastrophic backtracking patterns |
 
-### 🛠️ **Smart Code Fixes**
-- One-click security improvements via VS Code's Quick Fix (💡)
-- Parameterized query suggestions for SQL injection
-- Environment variable recommendations for secrets
-- Safe alternative function suggestions
-- Detailed explanations for each vulnerability type
-- Ignore functionality for false positives (❌ Ignore button)
+### 🛠️ Developer Tools
 
-### 🌐 **Multi-Language Support**
-Supports 8 programming languages with language-specific vulnerability patterns
+**Status Bar** — `$(shield) CodeShield: 2 critical | 5 warnings` always visible; click to open Problems panel.
 
-| Language | Vulnerabilities Detected |
-|----------|---------------------------|
-| **JavaScript/TypeScript** | SQL Injection, XSS, Command Injection, Path Traversal, API Keys, SSRF, Prototype Pollution, ReDoS |
-| **Python** | SQL Injection, Command Injection, Path Traversal, Pickle Deserialization, Template Injection, Unsafe Imports |
-| **Java** | SQL Injection, Command Injection, Path Traversal, Unsafe Deserialization, LDAP Injection, XXE |
-| **C#** | SQL Injection, XSS, Command Injection, Path Traversal, Unsafe Deserialization |
-| **C++** | Buffer Overflow, Format String, Memory Issues, Command Injection, SQL Injection |
-| **PHP** | SQL Injection, XSS, Command Injection, File Inclusion, Path Traversal, Unsafe Deserialization |
-| **Go** | SQL Injection, Command Injection, Path Traversal, API Key Exposure, Memory Safety |
-| **Dart/Flutter** | Debug Info Leaks, Insecure HTTP, Hardcoded API Keys, Path Traversal, Firebase Config Exposure |
+**Hover Tooltips** — Hover over flagged code to see the CWE reference, a real-world attack scenario, and a fix suggestion — without leaving the editor.
 
-## Getting Started
+**Secure Autocomplete** — Suggestions for safe alternatives appear when you type dangerous patterns (`cursor.execute(`, `innerHTML`, `yaml.load(`, etc.).
 
-### Installation
-1. Open VS Code
-2. Go to Extensions (Ctrl+Shift+X / Cmd+Shift+X)
-3. Search for "CodeShield"
-4. Click Install
+**Ignore System** — Ignore individual issues or all issues in a file. Ignored items remain visible as `[Ignored]` in the Problems panel, so nothing is silently hidden.
 
-### Usage
-1. **Open any supported code file** - CodeShield activates automatically
-2. **View security issues** - Vulnerabilities appear as colored wavy underlines
-3. **Save your file (Cmd+S)** - 🆕 Automatic notification appears for critical issues
-4. **Click "View All"** - 🆕 Opens interactive dashboard showing all vulnerabilities
-5. **Click any issue** - 🆕 Instantly navigates to the vulnerable code location
-6. **Get details** - Hover over highlighted code for explanations
-7. **Apply fixes** - Click the 💡 light bulb for quick fixes
-8. **Ignore warnings** - Use ❌ Ignore button to hide specific vulnerabilities
-9. **Manual scan** - Use Command Palette (Ctrl+Shift+P) → "CodeShield: Scan Current File for Security Issues"
-10. **🆕 Analyze code snippets** - Select any code block → Right-click → "Analyze Selected Code for Security Issues"
+### 🌐 Language Support
 
-## What's New in v0.0.11
+12 languages: **JavaScript · TypeScript · Python · Java · C# · C/C++ · PHP · Go · Ruby · Kotlin · Dart/Flutter · SQL**
 
-### ✨ New Features
+Each language has dedicated vulnerability patterns beyond the generic cross-language rules.
 
-#### 🎯 Interactive Vulnerability Dashboard
-Beautiful, clickable interface for managing security issues:
-- **Auto-appears on save**: When critical vulnerabilities are detected, you'll see a notification
-- **Click "View All"**: Opens a professional side-panel with all critical issues
-- **Visual organization**: Color-coded badges, clear line numbers, and code snippets
-- **One-click navigation**: Click any vulnerability to jump directly to its location
-- **Smart filtering**: Shows only critical (error-level) issues to reduce noise
-- **Clean UI**: Hover effects, smooth transitions, and organized layout
+## Quick Start
 
-**How it works:**
-1. Save a file with security issues (Cmd+S)
-2. See notification: "🔴 Found X critical security issue(s)"
-3. Click "View All" button
-4. Interactive panel opens showing all issues
-5. Click any issue to navigate to the exact code location
+```
+Extensions → Search "CodeShield" → Install
+```
 
-#### 🔍 Code Snippet Risk Analyzer
-Quick security analysis for selected code:
-- **No new windows**: Results appear in current editor
-- **Select and scan**: Highlight code → Right-click → "Analyze Selected Code"
-- **Instant results**: Shows vulnerability count and details
-- **Quick navigation**: "View Details" button jumps to first issue
-- **Perfect for code reviews**: Check security without full file scans
+Open any supported file — scanning starts automatically. Issues appear as wavy underlines; hover for details.
 
-#### 📈 Massively Expanded Detection Patterns
-All vulnerability detectors have been significantly enhanced:
-- **Java**: +15 patterns (SSRF, Reflection abuse, XXE, LDAP injection)
-- **C#**: +20 patterns (LDAP, XXE, SSRF, improved deserialization)
-- **C++**: +12 patterns (Integer overflow, Race conditions, TOCTOU)
-- **PHP**: +15 patterns (File upload, Open redirect, XXE)
-- **Python**: Enhanced subprocess, builtins, input validation detection
-- **Go**: Complete new pattern set for all major vulnerabilities
-- **ReDoS**: 6 additional dangerous regex patterns
+## Usage
+
+```
+1. Open a file                      → auto-scan runs
+2. Hover flagged code               → see attack scenario + fix hint
+3. Click $(clippy) CodeLens         → copy safe code example to clipboard
+4. Click $(eye-closed) Ignore       → hide a specific issue
+5. Click "Ignore All in This File"  → suppress all issues (shown as hints)
+6. Check status bar                 → quick count of active issues
+```
 
 ## Examples
 
-### SQL Injection Detection
+### SQL Injection
 ```javascript
-// ❌ Vulnerable - String concatenation in SQL query
-query = "SELECT * FROM users WHERE id = " + userId;
+// ❌ Vulnerable
+const q = `SELECT * FROM users WHERE id = ${userId}`;
 
-// ✅ Secure - Use parameterized queries
-const stmt = db.prepare("SELECT * FROM users WHERE id = ?");
-const result = stmt.get(userId);
+// ✅ Safe
+db.query("SELECT * FROM users WHERE id = ?", [userId]);
 ```
 
-### XSS Prevention
+### Hardcoded API Key
 ```javascript
-// ❌ Vulnerable - DOM innerHTML with user input
-element.innerHTML = userContent + "<div>";
+// ❌ Vulnerable
+const key = "sk-proj-abc123xyz456realkey";
 
-// ✅ Secure - Use textContent or sanitize
-element.textContent = userContent;
+// ✅ Safe
+const key = process.env.OPENAI_API_KEY;
 ```
 
-### API Key Security
-```javascript
-// ❌ Vulnerable - Hardcoded OpenAI API key
-const apiKey = "sk-1234567890abcdefghijklmnop";
-
-// ✅ Secure - Environment variable
-const apiKey = process.env.OPENAI_API_KEY;
+### Secret in Comment
+```python
+# TODO: remove — api_key = "AKIA1234567890EXAMPLE"   ← CodeShield flags this
 ```
 
-### Path Traversal Prevention
-```javascript
-// ❌ Vulnerable - File path concatenation
-fs.readFile(basePath + userInput, callback);
+### Ruby (ActiveRecord)
+```ruby
+# ❌ Vulnerable
+users = User.where("name = '#{params[:name]}'")
 
-// ✅ Secure - Path validation and sanitization
-const safePath = path.join(basePath, path.basename(userInput));
-fs.readFile(safePath, callback);
+# ✅ Safe
+users = User.where("name = ?", params[:name])
 ```
 
-### Unsafe Eval Detection
-```javascript
-// ❌ Vulnerable - Dynamic code execution
-eval("var result = " + userInput);
+### Kotlin (Android)
+```kotlin
+// ❌ Vulnerable
+val cursor = db.rawQuery("SELECT * FROM users WHERE id = " + userId, null)
 
-// ✅ Secure - Use JSON.parse for data
-const result = JSON.parse(userInput);
+// ✅ Safe
+val cursor = db.rawQuery("SELECT * FROM users WHERE id = ?", arrayOf(userId))
 ```
 
-## Extension Commands
+## Commands
 
-You can access these commands via Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`):
-
-| Command | Description |
-|---------|-------------|
-| `CodeShield: Scan Current File for Security Issues` | Manually scan the active file for vulnerabilities |
-| `CodeShield: Scan Workspace for Security Issues` | Scan all files in the current workspace |
-| `CodeShield: Analyze Selected Code for Security Issues` 🆕 | Analyze only the selected code snippet for vulnerabilities |
-| `CodeShield: Explain Security Vulnerability` | Open detailed explanation for selected vulnerability |
-| `CodeShield: Ignore Security Vulnerability` | Add vulnerability to ignore list |
+| Command | Shortcut |
+|---------|----------|
+| Scan Current File | Command Palette → `CodeShield: Scan Current File` |
+| Scan Workspace | Command Palette → `CodeShield: Scan Workspace` |
+| Analyze Selection | Right-click → `Analyze Selected Code` |
+| Ignore All in File | Command Palette → `CodeShield: Ignore All Issues in Current File` |
 
 ## Configuration
 
-CodeShield works out of the box with no configuration required. All scanning happens automatically when you open supported file types.
+Works out of the box. Optional settings under `codeshield.*` in VS Code settings:
 
-### Optional Settings
-
-CodeShield works great with default settings. Notifications automatically appear for critical issues only.
-
-**Note**: Automatic notifications are enabled by default and show only critical (error-level) vulnerabilities when you save files. This helps you stay aware of serious security issues without overwhelming you with alerts.
-
-## Requirements
-
-- Visual Studio Code version 1.74.0 or higher
-- No additional software or dependencies required
-
-## Supported File Extensions
-
-CodeShield automatically activates for these file types:
-- `.js`, `.jsx` (JavaScript)
-- `.ts`, `.tsx` (TypeScript) 
-- `.py` (Python)
-- `.java` (Java)
-- `.cs` (C#)
-- `.cpp`, `.c`, `.h` (C/C++)
-- `.php` (PHP)
-- `.go` (Go)
-- `.dart` (Dart/Flutter)
-- `.sql` (SQL files)
-
-## Known Issues
-
-None at this time. If you encounter any issues, please report them on GitHub.
+| Key | Default | Description |
+|-----|---------|-------------|
+| `enableSqlInjectionDetection` | `true` | SQL injection scanning |
+| `enableApiKeyDetection` | `true` | Secret/token scanning |
+| `notifications.showPopup` | `true` | Popup on file save |
+| `notifications.minSeverity` | `warning` | Minimum notification severity |
 
 ## Contributing
 
-We welcome contributions! Please submit issues and pull requests on GitHub.
+Issues and PRs welcome on [GitHub](https://github.com/OmerCeng/codeshield-vscode).
 
 ## License
 
-This extension is licensed under the MIT License.
-
----
-
-**Secure your code with CodeShield** 🛡️
-
+MIT

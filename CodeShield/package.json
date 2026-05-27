@@ -2,7 +2,7 @@
   "name": "vs-codeshield",
   "displayName": "vs-CodeShield", 
   "description": "A VS Code extension that detects security vulnerabilities like SQL injection and exposed API keys, providing fix suggestions",
-  "version": "0.0.11",
+  "version": "0.1.0",
   "icon": "icon.png",
   "publisher": "vscodecodeshield",
   "license": "MIT",
@@ -32,7 +32,21 @@
     "Other"
   ],
   "activationEvents": [
-    "*"
+    "onLanguage:javascript",
+    "onLanguage:typescript",
+    "onLanguage:python",
+    "onLanguage:java",
+    "onLanguage:csharp",
+    "onLanguage:cpp",
+    "onLanguage:c",
+    "onLanguage:php",
+    "onLanguage:sql",
+    "onLanguage:go",
+    "onLanguage:ruby",
+    "onLanguage:kotlin",
+    "onCommand:codeshield.scanCurrentFile",
+    "onCommand:codeshield.scanWorkspace",
+    "onCommand:codeshield.ignoreAllInFile"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -60,6 +74,16 @@
       {
         "command": "codeshield.analyzeSelection",
         "title": "Analyze Selected Code for Security Issues",
+        "category": "CodeShield"
+      },
+      {
+        "command": "codeshield.ignoreAllInFile",
+        "title": "Ignore All Security Issues in Current File",
+        "category": "CodeShield"
+      },
+      {
+        "command": "codeshield.copySafeExample",
+        "title": "Copy Safe Code Example to Clipboard",
         "category": "CodeShield"
       }
     ],

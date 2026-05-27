@@ -3,6 +3,8 @@ import { SecurityVulnerability } from '../types/vulnerability';
 import { IgnoreManager } from '../utils/ignoreManager';
 
 export class SecurityScanner {
+    private currentLanguageId: string = 'unknown';
+
     private sqlInjectionPatterns = [
         // SQL Injection patterns - catches various naming conventions
         /['"]\s*\+\s*[a-zA-Z_$][a-zA-Z0-9_$]*\s*\+\s*['"]/g, // String concatenation in SQL
@@ -13,34 +15,46 @@ export class SecurityScanner {
         /\b(SqlCommand|SqlDataAdapter|MySqlCommand|NpgsqlCommand)\b\s*\(\s*['"]\s*(?:SELECT|INSERT|UPDATE|DELETE)\s+.*?\s*\+\s*/gi, // C# / .NET
         /db\.\b(query|execute|run|exec|raw)\b\s*\(\s*['"]\s*(?:SELECT|INSERT|UPDATE|DELETE)\s+.*?\s*\+\s*/gi, // Generic DB query
         /\b(f['"]|\.format\()\s*.*?(?:SELECT|INSERT|UPDATE|DELETE)/gi, // Python f-strings and format
+        /`\s*(?:SELECT|INSERT|UPDATE|DELETE|DROP|ALTER)\b[^`]*\$\{/gi, // JS/TS template literal SQL
     ];
 
     private apiKeyPatterns = [
-        // Common API key patterns - More flexible to catch variations
-        /\b(api[_-]?key|apikey|api)\b\s*[:=]\s*['"][a-zA-Z0-9_-]{8,}['"]/gi,
-        /\b(secret[_-]?key|secretkey|secret)\b\s*[:=]\s*['"][a-zA-Z0-9_-]{8,}['"]/gi,
-        /\b(access[_-]?token|accesstoken|token)\b\s*[:=]\s*['"][a-zA-Z0-9_-]{8,}['"]/gi,
-        /\b(auth[_-]?token|authtoken)\b\s*[:=]\s*['"][a-zA-Z0-9_-]{8,}['"]/gi,
-        /bearer\s+[a-zA-Z0-9_-]{20,}/gi,
-        /sk-[a-zA-Z0-9]{20,}/g, // OpenAI API keys
-        /pk-[a-zA-Z0-9]{20,}/g, // Stripe public keys
-        /AKIA[0-9A-Z]{16}/g, // AWS Access Key
-        /ya29\.[a-zA-Z0-9_-]{68}/g, // Google OAuth token
-        /ghp_[a-zA-Z0-9]{36}/g, // GitHub personal access token
+        // Generic key/token names — case-insensitive, all naming styles
+        /\b(api[_-]?key|apikey|api)\b\s*[:=]\s*['"`][a-zA-Z0-9_-]{8,}['"`]/gi,
+        /\b(secret[_-]?key|secretkey|secret)\b\s*[:=]\s*['"`][a-zA-Z0-9_-]{8,}['"`]/gi,
+        /\b(access[_-]?token|accesstoken|token)\b\s*[:=]\s*['"`][a-zA-Z0-9_-]{8,}['"`]/gi,
+        /\b(auth[_-]?token|authtoken)\b\s*[:=]\s*['"`][a-zA-Z0-9_-]{8,}['"`]/gi,
+        /\b(client[_-]?secret|clientsecret|private[_-]?key)\b\s*[:=]\s*['"`][a-zA-Z0-9_-]{8,}['"`]/gi,
+        /bearer\s+[a-zA-Z0-9_\-.]{20,}/gi,
+        // Service-specific high-confidence tokens
+        /\bsk-(?:proj-)?[a-zA-Z0-9_-]{20,}/g,  // OpenAI
+        /\bpk_(?:live|test)_[a-zA-Z0-9]{20,}/g, // Stripe publishable
+        /\bsk_(?:live|test)_[a-zA-Z0-9]{20,}/g, // Stripe secret
+        /pk-[a-zA-Z0-9]{20,}/g, // Stripe legacy
+        /AKIA[0-9A-Z]{16}/g,    // AWS Access Key
+        /ya29\.[a-zA-Z0-9_-]{40,}/g, // Google OAuth token
+        /\bghp_[a-zA-Z0-9]{30,}/g,   // GitHub personal access token
+        /\bghs_[a-zA-Z0-9]{30,}/g,   // GitHub server token
+        /\bglpat-[a-zA-Z0-9_-]{20,}/g, // GitLab
+        /\bxox[baprs]-[a-zA-Z0-9-]{10,}/g, // Slack
     ];
 
     private hardcodedSecretPatterns = [
-        /\b(password|passwd|pwd|pass)\b\s*[:=]\s*['"][^'"]{4,}['"]/gi,
+        /\b(password|passwd|pwd|pass)\b\s*[:=]\s*['"`][^'"`]{4,}['"`]/gi,
         /\b(private[_-]?key|privatekey|pkey)\b\s*[:=]\s*['"]-----BEGIN/gi,
         /\b(connection[_-]?string|connectionstring|conn[_-]?str)\b\s*[:=]\s*['"].*password=/gi,
-        /\b(db[_-]?password|dbpassword|database[_-]?pwd)\b\s*[:=]\s*['"][^'"]{4,}['"]/gi,
+        /\b(db[_-]?password|dbpassword|database[_-]?pwd)\b\s*[:=]\s*['"`][^'"`]{4,}['"`]/gi,
+        /-----BEGIN (?:RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----/g, // PEM private keys
+        /\bjwt[_-]?secret\b\s*[:=]\s*['"`][^'"`]{8,}['"`]/gi,      // JWT secrets
     ];
 
     private unsafeEvalPatterns = [
         /\beval\s*\(/g,
         /\bFunction\s*\(/g,
         /\b(setTimeout|setInterval)\s*\(\s*['"][^'"]*['"]\s*,/g,
-        /\b(exec|execSync|execFile|execFileSync|spawn|spawnSync)\s*\(\s*['"][^'"]*\$\{/g, // Command injection
+        /\b(exec|execSync|execFile|execFileSync|spawn|spawnSync)\s*\(\s*['"][^'"]*\$\{/g, // template literal command
+        /\b(exec|execSync|execFile|execFileSync)\s*\(\s*['"][^'"]*['"]\s*\+/g, // string concat command
+        /\b(spawn|spawnSync)\s*\(\s*[^,)]*\+/g, // spawn with concatenated path
         /\b(system|shell_exec|exec|passthru|popen)\s*\(/g, // PHP command execution
         /\b(Runtime\.getRuntime\(\)\.exec)\s*\(/g, // Java command execution
         /\b(Process\.Start|ProcessStartInfo)\s*\(/g, // C# process execution
@@ -49,13 +63,14 @@ export class SecurityScanner {
 
     // Path Traversal - File system operations with user input
     private pathTraversalPatterns = [
-        /\b(fs\.|filesystem\.|file\.)?(readFile|read|writeFile|write|readFileSync|writeFileSync)\s*\(\s*[^,)]*\+\s*/g, // Node.js fs operations
-        /\b(require|import)\s*\(\s*[^)]*\+\s*/g, // Dynamic require/import with user input
+        /\b(fs\.|filesystem\.|file\.)?(readFile|read|writeFile|write|readFileSync|writeFileSync)\s*\(\s*[^,)]*\+\s*/g, // Node.js fs with concat
+        /\b(?:fs\.)?(readFileSync|writeFileSync|readFile|writeFile)\s*\(\s*(?:req\.|request\.|params\.|query\.|body\.)/g, // direct user input (no concat)
+        /\b(require|import)\s*\(\s*[^)]*\+\s*/g, // Dynamic require/import
         /\b(res\.|response\.)?(sendFile|download|send)\s*\(\s*[^)]*\+\s*/g, // Express file operations
         /\bopen\s*\(\s*[^,)]*\+\s*/g, // Python open() with concatenation
-        /\b(createReadStream|createWriteStream|readdir|readdirSync)\s*\(\s*[^,)]*\+\s*/g, // Node.js stream operations
-        /\b(File|FileReader|FileWriter|FileInputStream|FileOutputStream)\s*\(\s*[^)]*\+\s*/g, // Java file operations
-        /\b(Path\.Combine|File\.ReadAllText|File\.WriteAllText|File\.Open)\s*\(\s*[^)]*\+\s*/g, // C# file operations
+        /\b(createReadStream|createWriteStream|readdir|readdirSync)\s*\(\s*[^,)]*\+\s*/g, // Node.js stream ops
+        /\b(File|FileReader|FileWriter|FileInputStream|FileOutputStream)\s*\(\s*[^)]*\+\s*/g, // Java file ops
+        /\b(Path\.Combine|File\.ReadAllText|File\.WriteAllText|File\.Open)\s*\(\s*[^)]*\+\s*/g, // C# file ops
         /\b(include|require|include_once|require_once)\s*\(\s*[^)]*\+\s*/g, // PHP file inclusion
     ];
 
@@ -117,7 +132,6 @@ export class SecurityScanner {
         /\/\.\*\.\*/g, // Multiple .* patterns
         /\/\([^)]*\{[0-9]+,\}\)\+/g, // Nested quantifiers with explicit counts
         /\b(new\s+)?RegExp\s*\(\s*[^)]*\(\w*\+\)\+/g, // Dynamic regex with nested quantifiers
-        /\/\(.+\|\1\)+\//g, // Backreference alternation
         /\/\(\[\^\]\]*\)\*\(\[\^\]\]*\)\*/g, // Multiple negated character classes
         /\/\w\{\d+,\}\+/g, // Large min quantifier with +
         /\/\(\?:\w+\)\*/g, // Non-capturing group with *
@@ -313,58 +327,49 @@ export class SecurityScanner {
 
     // Template injection patterns
     private templateInjectionPatterns = [
-        /Template\s*\(\s*[^'"]*[\+\$]/g, // Jinja2 template with user input
-        /render_template_string\s*\(/g, // Flask render_template_string
-        /from_string\s*\(\s*[^'"]*[\+\$]/g, // Template from string
-        /\.render\s*\(\s*[^}]*user/g, // Template render with user data
+        /Template\s*\(\s*[^'"]*[\+\$]/g,
+        /render_template_string\s*\(/g,
+        /from_string\s*\(\s*[^'"]*[\+\$]/g,
+        /\.render\s*\(\s*[^}]*user/g,
+    ];
+
+    // Secrets inside comments — catches keys left in TODO/FIXME/remove-me notes
+    private commentSecretPatterns = [
+        /(?:\/\/|#|\/\*)\s*.*\b(api[_-]?key|apikey)\b\s*[:=]\s*['"]?[a-zA-Z0-9_\-]{8,}/gi,
+        /(?:\/\/|#|\/\*)\s*.*\b(secret[_-]?key|secret)\b\s*[:=]\s*['"]?[a-zA-Z0-9_\-]{8,}/gi,
+        /(?:\/\/|#|\/\*)\s*.*\b(access[_-]?token|token)\b\s*[:=]\s*['"]?[a-zA-Z0-9_\-]{8,}/gi,
+        /(?:\/\/|#|\/\*)\s*.*\b(password|passwd|pwd)\b\s*[:=]\s*['"]?[^\s'"]{4,}/gi,
+        /(?:\/\/|#|\/\*)\s*.*(sk-[a-zA-Z0-9]{20,})/g,
+        /(?:\/\/|#|\/\*)\s*.*(AKIA[0-9A-Z]{16})/g,
+        /(?:\/\/|#|\/\*)\s*.*(ghp_[a-zA-Z0-9]{36})/g,
+        /(?:\/\/|#|\/\*)\s*.*\b(bearer)\s+[a-zA-Z0-9_\-]{20,}/gi,
     ];
 
     scanDocument(document: vscode.TextDocument): SecurityVulnerability[] {
         const vulnerabilities: SecurityVulnerability[] = [];
         const text = document.getText();
         const lines = text.split('\n');
+        const languageId = document.languageId;
+
+        this.currentLanguageId = languageId;
 
         for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
             const line = lines[lineIndex];
-            
-            // Check for SQL injection
+
+            vulnerabilities.push(...this.checkCommentSecrets(line, lineIndex));
             vulnerabilities.push(...this.checkSqlInjection(line, lineIndex));
-            
-            // Check for API keys
             vulnerabilities.push(...this.checkApiKeys(line, lineIndex));
-            
-            // Check for hardcoded secrets
             vulnerabilities.push(...this.checkHardcodedSecrets(line, lineIndex));
-            
-            // Check for unsafe eval
             vulnerabilities.push(...this.checkUnsafeEval(line, lineIndex));
-            
-            // Check for path traversal
             vulnerabilities.push(...this.checkPathTraversal(line, lineIndex));
-            
-            // Check for XSS vulnerabilities
             vulnerabilities.push(...this.checkXSS(line, lineIndex));
-            
-            // Check for SSRF vulnerabilities
             vulnerabilities.push(...this.checkSSRF(line, lineIndex));
-            
-            // Check for NoSQL injection
             vulnerabilities.push(...this.checkNoSQLInjection(line, lineIndex));
-            
-            // Check for prototype pollution
             vulnerabilities.push(...this.checkPrototypePollution(line, lineIndex));
-            
-            // Check for ReDoS vulnerabilities
             vulnerabilities.push(...this.checkReDoS(line, lineIndex));
-            
-            // Check for Python-specific unsafe patterns
             vulnerabilities.push(...this.checkPythonUnsafe(line, lineIndex));
-            
-            // Check for template injection
             vulnerabilities.push(...this.checkTemplateInjection(line, lineIndex));
-            
-            // Language-specific vulnerability checks
-            const languageId = document.languageId;
+
             if (languageId === 'java') {
                 vulnerabilities.push(...this.checkJavaVulnerabilities(line, lineIndex));
             } else if (languageId === 'csharp') {
@@ -377,16 +382,65 @@ export class SecurityScanner {
                 vulnerabilities.push(...this.checkGoVulnerabilities(line, lineIndex));
             } else if (languageId === 'dart') {
                 vulnerabilities.push(...this.checkDartVulnerabilities(line, lineIndex));
+            } else if (languageId === 'ruby') {
+                vulnerabilities.push(...this.checkRubyVulnerabilities(line, lineIndex));
+            } else if (languageId === 'kotlin') {
+                vulnerabilities.push(...this.checkKotlinVulnerabilities(line, lineIndex));
             }
         }
 
-        // Remove duplicates - same type on same line with same code
-        const uniqueVulnerabilities = this.removeDuplicates(vulnerabilities);
-
-        // Filter out ignored vulnerabilities
-        return uniqueVulnerabilities.filter((vuln: SecurityVulnerability) => 
+        const unique = this.removeDuplicates(vulnerabilities);
+        return unique.filter((vuln: SecurityVulnerability) =>
             !IgnoreManager.isIgnored(document, vuln.line, vuln.type)
         );
+    }
+
+    /** Returns all vulnerabilities without applying the ignore filter. */
+    scanDocumentAll(document: vscode.TextDocument): SecurityVulnerability[] {
+        const vulnerabilities: SecurityVulnerability[] = [];
+        const text = document.getText();
+        const lines = text.split('\n');
+        const languageId = document.languageId;
+
+        this.currentLanguageId = languageId;
+
+        for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+            const line = lines[lineIndex];
+
+            vulnerabilities.push(...this.checkCommentSecrets(line, lineIndex));
+            vulnerabilities.push(...this.checkSqlInjection(line, lineIndex));
+            vulnerabilities.push(...this.checkApiKeys(line, lineIndex));
+            vulnerabilities.push(...this.checkHardcodedSecrets(line, lineIndex));
+            vulnerabilities.push(...this.checkUnsafeEval(line, lineIndex));
+            vulnerabilities.push(...this.checkPathTraversal(line, lineIndex));
+            vulnerabilities.push(...this.checkXSS(line, lineIndex));
+            vulnerabilities.push(...this.checkSSRF(line, lineIndex));
+            vulnerabilities.push(...this.checkNoSQLInjection(line, lineIndex));
+            vulnerabilities.push(...this.checkPrototypePollution(line, lineIndex));
+            vulnerabilities.push(...this.checkReDoS(line, lineIndex));
+            vulnerabilities.push(...this.checkPythonUnsafe(line, lineIndex));
+            vulnerabilities.push(...this.checkTemplateInjection(line, lineIndex));
+
+            if (languageId === 'java') {
+                vulnerabilities.push(...this.checkJavaVulnerabilities(line, lineIndex));
+            } else if (languageId === 'csharp') {
+                vulnerabilities.push(...this.checkCSharpVulnerabilities(line, lineIndex));
+            } else if (languageId === 'cpp' || languageId === 'c') {
+                vulnerabilities.push(...this.checkCppVulnerabilities(line, lineIndex));
+            } else if (languageId === 'php') {
+                vulnerabilities.push(...this.checkPhpVulnerabilities(line, lineIndex));
+            } else if (languageId === 'go') {
+                vulnerabilities.push(...this.checkGoVulnerabilities(line, lineIndex));
+            } else if (languageId === 'dart') {
+                vulnerabilities.push(...this.checkDartVulnerabilities(line, lineIndex));
+            } else if (languageId === 'ruby') {
+                vulnerabilities.push(...this.checkRubyVulnerabilities(line, lineIndex));
+            } else if (languageId === 'kotlin') {
+                vulnerabilities.push(...this.checkKotlinVulnerabilities(line, lineIndex));
+            }
+        }
+
+        return this.removeDuplicates(vulnerabilities);
     }
 
     private checkSqlInjection(line: string, lineIndex: number): SecurityVulnerability[] {
@@ -498,40 +552,93 @@ export class SecurityScanner {
     }
 
     private getSqlInjectionFix(code: string): string {
-        // Provide language-specific fixes
-        if (code.includes('cursor.execute')) {
+        const lang = this.currentLanguageId;
+        if (lang === 'python' || code.includes('cursor.execute')) {
             return 'cursor.execute("SELECT * FROM table WHERE id = %s", (user_id,))';
-        } else if (code.includes('SqlCommand')) {
-            return 'new SqlCommand("SELECT * FROM table WHERE id = @id", connection)';
-        } else if (code.includes('executeQuery')) {
-            return 'PreparedStatement stmt = connection.prepareStatement("SELECT * FROM table WHERE id = ?")';
         }
-        return 'Use parameterized query instead of string concatenation';
+        if (lang === 'java' || code.includes('executeQuery') || code.includes('createQuery')) {
+            return 'PreparedStatement stmt = conn.prepareStatement("SELECT * FROM table WHERE id = ?"); stmt.setInt(1, userId);';
+        }
+        if (lang === 'csharp' || code.includes('SqlCommand')) {
+            return 'cmd.Parameters.Add("@id", SqlDbType.Int).Value = userId;';
+        }
+        if (lang === 'php') {
+            return '$stmt = $pdo->prepare("SELECT * FROM table WHERE id = ?"); $stmt->execute([$userId]);';
+        }
+        if (lang === 'go' || code.includes('db.Query')) {
+            return 'db.Query("SELECT * FROM table WHERE id = ?", userId)';
+        }
+        return 'db.query("SELECT * FROM table WHERE id = ?", [userId])';
     }
 
     private getApiKeyFix(code: string): string {
-        const keyName = code.match(/(\w+)[_-]?(key|token|secret)/i)?.[0] || 'API_KEY';
-        return `process.env.${keyName.toUpperCase()} || 'your-${keyName.toLowerCase()}-here'`;
+        const lang = this.currentLanguageId;
+        const rawMatch = code.match(/\b(\w[\w_-]*(?:key|token|secret|api)[\w_-]*)\b/i);
+        const keyName = (rawMatch?.[0] ?? 'API_KEY').toUpperCase().replace(/-/g, '_');
+        if (lang === 'python') {
+            return `os.environ.get("${keyName}")`;
+        }
+        if (lang === 'java') {
+            return `System.getenv("${keyName}")`;
+        }
+        if (lang === 'csharp') {
+            return `Environment.GetEnvironmentVariable("${keyName}")`;
+        }
+        if (lang === 'php') {
+            return `getenv("${keyName}")`;
+        }
+        if (lang === 'go') {
+            return `os.Getenv("${keyName}")`;
+        }
+        return `process.env.${keyName}`;
     }
 
     private getSecretFix(code: string): string {
-        if (code.includes('password')) {
-            return 'process.env.DATABASE_PASSWORD';
-        } else if (code.includes('private_key')) {
-            return 'process.env.PRIVATE_KEY';
+        const lang = this.currentLanguageId;
+        let varName = 'SECRET_VALUE';
+        if (code.toLowerCase().includes('password') || code.toLowerCase().includes('passwd')) {
+            varName = 'DB_PASSWORD';
+        } else if (code.toLowerCase().includes('private_key') || code.toLowerCase().includes('privatekey')) {
+            varName = 'PRIVATE_KEY';
+        } else if (code.toLowerCase().includes('secret')) {
+            varName = 'SECRET_KEY';
         }
-        return 'process.env.SECRET_VALUE';
+        if (lang === 'python') {
+            return `os.environ.get("${varName}")`;
+        }
+        if (lang === 'java') {
+            return `System.getenv("${varName}")`;
+        }
+        if (lang === 'csharp') {
+            return `Environment.GetEnvironmentVariable("${varName}")`;
+        }
+        if (lang === 'php') {
+            return `getenv("${varName}")`;
+        }
+        if (lang === 'go') {
+            return `os.Getenv("${varName}")`;
+        }
+        return `process.env.${varName}`;
     }
 
     private getUnsafeEvalFix(code: string): string {
+        const lang = this.currentLanguageId;
         if (code.includes('eval')) {
-            return 'JSON.parse() // or use a safer parsing method';
-        } else if (code.includes('Function')) {
-            return '// Use a predefined function instead';
-        } else if (code.includes('setTimeout') || code.includes('setInterval')) {
-            return code.replace(/['"][^'"]*['"]/, 'functionReference');
+            if (lang === 'python') {
+                return 'ast.literal_eval(user_input)';
+            }
+            return 'JSON.parse(input)';
         }
-        return '// Use a safer alternative';
+        if (code.includes('Function(')) {
+            return 'predefinedFunction(args)';
+        }
+        if (code.includes('setTimeout') || code.includes('setInterval')) {
+            return code.replace(/['"][^'"]*['"]/, 'callbackFn');
+        }
+        if (lang === 'python' && (code.includes('exec') || code.includes('compile'))) {
+            return 'ast.literal_eval(user_input)';
+        }
+        return 'safeAlternative(input)';
     }
 
     private checkPathTraversal(line: string, lineIndex: number): SecurityVulnerability[] {
@@ -822,26 +929,53 @@ export class SecurityScanner {
         return vulnerabilities;
     }
 
-    private getPythonUnsafeFix(code: string): string {
-        if (code.includes('pickle.loads')) {
-            return 'json.loads(data) # Use JSON instead of pickle';
-        } else if (code.includes('yaml.load')) {
-            return 'yaml.safe_load(data) # Use safe_load instead';
-        } else if (code.includes('eval')) {
-            return '# Use ast.literal_eval() for safe evaluation';
-        } else if (code.includes('exec')) {
-            return '# Use predefined functions instead of exec';
+    private checkCommentSecrets(line: string, lineIndex: number): SecurityVulnerability[] {
+        const vulnerabilities: SecurityVulnerability[] = [];
+
+        for (const pattern of this.commentSecretPatterns) {
+            let match;
+            pattern.lastIndex = 0;
+
+            while ((match = pattern.exec(line)) !== null) {
+                vulnerabilities.push({
+                    type: 'api-key',
+                    message: 'Secret found inside a comment. Remove it and rotate the credential immediately.',
+                    line: lineIndex + 1,
+                    column: match.index,
+                    severity: 'error',
+                    code: match[0],
+                    suggestion: 'Delete the credential from this comment and store it in an environment variable. Assume it is already compromised if it was ever committed.',
+                    fixAction: {
+                        title: 'Remove secret from comment',
+                        replacement: line
+                            .replace(/(?:\/\/|#)\s*/, '// TODO: move credential to environment variable')
+                            .replace(/\/\*.*?\*\//, '/* TODO: move credential to environment variable */'),
+                    },
+                });
+            }
         }
-        return '# Use a safer alternative';
+
+        return vulnerabilities;
+    }
+
+    private getPythonUnsafeFix(code: string): string {
+        if (code.includes('pickle.loads') || code.includes('pickle.load')) {
+            return 'json.loads(data)';
+        }
+        if (code.includes('yaml.load')) {
+            return 'yaml.safe_load(stream)';
+        }
+        if (code.includes('eval(')) {
+            return 'ast.literal_eval(user_input)';
+        }
+        return 'ast.literal_eval(user_input)';
     }
 
     private getTemplateInjectionFix(code: string): string {
-        if (code.includes('Template(')) {
-            return 'Template(predefined_template_string)';
-        } else if (code.includes('render_template_string')) {
-            return 'render_template(safe_template_name, data)';
+        if (code.includes('render_template_string')) {
+            return 'render_template("template_name.html", data=data)';
         }
-        return 'use_predefined_template(template_name, data)';
+        return 'render_template("safe_template.html", data=sanitized_data)';
     }
 
     // Java-specific vulnerability checks
@@ -1034,6 +1168,224 @@ export class SecurityScanner {
         return vulnerabilities;
     }
 
+    private rubyVulnerabilityPatterns = [
+        /\b(where|find_by_sql|execute|select_all)\s*\(\s*["'].*#\{/g,           // ActiveRecord string interpolation
+        /\b(system|exec|spawn|popen|`)\s*[("'].*#\{/g,                           // Command injection via interpolation
+        /\beval\s*\(/g,                                                            // eval
+        /\bMarshal\s*\.\s*load\s*\(/g,                                            // Unsafe deserialization
+        /\bYAML\s*\.\s*load\s*\([^)]*(?:params|request|input)/gi,                // YAML.load with user input
+        /\bFile\s*\.\s*(read|open|readlines)\s*\(\s*params/g,                    // Path traversal
+        /\bopen\s*\(\s*params/g,                                                  // SSRF via Kernel#open
+        /\b\.send\s*\(\s*params/g,                                                // Dynamic method call
+        /\b(password|secret|api_key|token)\s*=\s*["'][^"']{6,}["']/gi,           // Hardcoded secrets
+        /\brender\s+inline\s*:/g,                                                 // Inline template (XSS)
+    ];
+
+    private kotlinVulnerabilityPatterns = [
+        /\.rawQuery\s*\(\s*["'].*\+\s*/g,                                         // SQLite raw query with concat
+        /\bwebView\s*\.\s*settings\s*\.\s*javaScriptEnabled\s*=\s*true/g,         // WebView JS enabled
+        /\bwebView\s*\.\s*loadUrl\s*\(\s*intent/g,                                // WebView loading intent URL
+        /Runtime\s*\.\s*getRuntime\s*\(\s*\)\s*\.\s*exec\s*\(/g,                 // Command injection
+        /\bLog\s*\.\s*[deiwtv]\s*\([^)]*(?:password|secret|token|key)/gi,        // Logging sensitive data
+        /\b(password|secret|apiKey|api_key|token)\s*=\s*["'][^"']{6,}["']/g,     // Hardcoded secret
+        /getSharedPreferences[^)]*MODE_WORLD_READABLE/g,                          // World-readable prefs
+        /http:\/\/(?!localhost|127\.0\.0\.1)/g,                                   // Plain HTTP (not HTTPS)
+        /\.setAllowFileAccess\s*\(\s*true\s*\)/g,                                 // WebView file access
+        /ObjectInputStream\s*\(/g,                                                 // Java deserialization in Kotlin
+    ];
+
+    private checkRubyVulnerabilities(line: string, lineIndex: number): SecurityVulnerability[] {
+        const vulnerabilities: SecurityVulnerability[] = [];
+
+        const rules: Array<{ pattern: RegExp; type: any; message: string; severity: 'error' | 'warning'; fix: string }> = [
+            {
+                pattern: /\b(where|find_by_sql|execute|select_all)\s*\(\s*["'].*#\{/g,
+                type: 'sql-injection',
+                message: 'SQL injection via ActiveRecord string interpolation. Use parameterized queries.',
+                severity: 'error',
+                fix: 'User.where("name = ?", params[:name])',
+            },
+            {
+                pattern: /\b(system|exec|spawn|popen|`)\s*[("'].*#\{/g,
+                type: 'command-injection',
+                message: 'Command injection via shell string interpolation.',
+                severity: 'error',
+                fix: 'Use Open3.capture2e with an argument array instead of shell string',
+            },
+            {
+                pattern: /\beval\s*\(/g,
+                type: 'unsafe-eval',
+                message: 'eval() executes arbitrary Ruby code. Never use with user input.',
+                severity: 'error',
+                fix: 'Remove eval — refactor to use predefined methods',
+            },
+            {
+                pattern: /\bMarshal\s*\.\s*load\s*\(/g,
+                type: 'unsafe-deserialization',
+                message: 'Marshal.load with untrusted data allows remote code execution.',
+                severity: 'error',
+                fix: 'Use JSON.parse() or MessagePack instead of Marshal',
+            },
+            {
+                pattern: /\bYAML\s*\.\s*load\s*\([^)]*(?:params|request|input)/gi,
+                type: 'unsafe-deserialization',
+                message: 'YAML.load with user input can execute arbitrary Ruby objects.',
+                severity: 'error',
+                fix: 'YAML.safe_load(params[:data])',
+            },
+            {
+                pattern: /\bFile\s*\.\s*(read|open|readlines)\s*\(\s*params/g,
+                type: 'path-traversal',
+                message: 'Path traversal: file path comes from user input.',
+                severity: 'error',
+                fix: 'File.read(Rails.root.join("safe_dir", File.basename(params[:file])))',
+            },
+            {
+                pattern: /\bopen\s*\(\s*params/g,
+                type: 'ssrf',
+                message: 'SSRF: Kernel#open with user-controlled URL can access internal services.',
+                severity: 'error',
+                fix: 'Use URI.parse + Net::HTTP with an allowlist of trusted hosts',
+            },
+            {
+                pattern: /\b\.send\s*\(\s*params/g,
+                type: 'unsafe-eval',
+                message: 'Dynamic method dispatch with user input allows calling arbitrary methods.',
+                severity: 'error',
+                fix: 'Whitelist allowed method names before calling .send()',
+            },
+            {
+                pattern: /\b(password|secret|api_key|token)\s*=\s*["'][^"']{6,}["']/gi,
+                type: 'hardcoded-secret',
+                message: 'Hardcoded credential detected in Ruby source.',
+                severity: 'error',
+                fix: 'ENV["SECRET_KEY"] or Rails credentials',
+            },
+            {
+                pattern: /\brender\s+inline\s*:/g,
+                type: 'xss',
+                message: 'Inline template rendering can allow XSS if user data is unsanitized.',
+                severity: 'warning',
+                fix: 'Use a proper template file: render "template_name"',
+            },
+        ];
+
+        for (const rule of rules) {
+            let match;
+            rule.pattern.lastIndex = 0;
+            while ((match = rule.pattern.exec(line)) !== null) {
+                vulnerabilities.push({
+                    type: rule.type,
+                    message: rule.message,
+                    line: lineIndex + 1,
+                    column: match.index,
+                    severity: rule.severity,
+                    code: match[0],
+                    suggestion: rule.fix,
+                    fixAction: { title: rule.fix.split('\n')[0], replacement: rule.fix },
+                });
+            }
+        }
+
+        return vulnerabilities;
+    }
+
+    private checkKotlinVulnerabilities(line: string, lineIndex: number): SecurityVulnerability[] {
+        const vulnerabilities: SecurityVulnerability[] = [];
+
+        const rules: Array<{ pattern: RegExp; type: any; message: string; severity: 'error' | 'warning'; fix: string }> = [
+            {
+                pattern: /\.rawQuery\s*\(\s*["'].*\+\s*/g,
+                type: 'sql-injection',
+                message: 'SQL injection in SQLite rawQuery via string concatenation.',
+                severity: 'error',
+                fix: 'db.rawQuery("SELECT * FROM table WHERE id = ?", arrayOf(userId))',
+            },
+            {
+                pattern: /\bwebView\s*\.\s*settings\s*\.\s*javaScriptEnabled\s*=\s*true/g,
+                type: 'xss',
+                message: 'WebView JavaScript enabled — ensure only trusted URLs are loaded.',
+                severity: 'warning',
+                fix: 'Disable JS if not required, or restrict loadUrl() to trusted origins',
+            },
+            {
+                pattern: /\bwebView\s*\.\s*loadUrl\s*\(\s*intent/g,
+                type: 'ssrf',
+                message: 'WebView loading a URL from an Intent — attacker can supply arbitrary URLs.',
+                severity: 'error',
+                fix: 'Validate the URL against an allowlist before calling loadUrl()',
+            },
+            {
+                pattern: /Runtime\s*\.\s*getRuntime\s*\(\s*\)\s*\.\s*exec\s*\(/g,
+                type: 'command-injection',
+                message: 'Command injection via Runtime.exec() with potential user input.',
+                severity: 'error',
+                fix: 'Use ProcessBuilder with a string array: ProcessBuilder("cmd", arg1)',
+            },
+            {
+                pattern: /\bLog\s*\.\s*[deiwtv]\s*\([^)]*(?:password|secret|token|key)/gi,
+                type: 'hardcoded-secret',
+                message: 'Sensitive data logged — visible in logcat and device logs.',
+                severity: 'warning',
+                fix: 'Never log passwords, tokens, or keys — remove this log statement',
+            },
+            {
+                pattern: /\b(password|secret|apiKey|api_key|token)\s*=\s*["'][^"']{6,}["']/g,
+                type: 'hardcoded-secret',
+                message: 'Hardcoded credential in Kotlin source — visible in APK decompilation.',
+                severity: 'error',
+                fix: 'Use BuildConfig fields from local.properties or Android Keystore',
+            },
+            {
+                pattern: /getSharedPreferences[^)]*MODE_WORLD_READABLE/g,
+                type: 'hardcoded-secret',
+                message: 'MODE_WORLD_READABLE allows other apps to read these preferences.',
+                severity: 'error',
+                fix: 'Use MODE_PRIVATE for SharedPreferences',
+            },
+            {
+                pattern: /http:\/\/(?!localhost|127\.0\.0\.1)/g,
+                type: 'ssrf',
+                message: 'Plain HTTP (not HTTPS) — traffic can be intercepted on Android.',
+                severity: 'warning',
+                fix: 'Use https:// and add network_security_config.xml cleartext restrictions',
+            },
+            {
+                pattern: /\.setAllowFileAccess\s*\(\s*true\s*\)/g,
+                type: 'path-traversal',
+                message: 'WebView file access allows reading local files via file:// URLs.',
+                severity: 'error',
+                fix: 'webView.settings.allowFileAccess = false',
+            },
+            {
+                pattern: /ObjectInputStream\s*\(/g,
+                type: 'unsafe-deserialization',
+                message: 'ObjectInputStream deserialization can allow remote code execution.',
+                severity: 'error',
+                fix: 'Use kotlinx.serialization or Gson instead of Java serialization',
+            },
+        ];
+
+        for (const rule of rules) {
+            let match;
+            rule.pattern.lastIndex = 0;
+            while ((match = rule.pattern.exec(line)) !== null) {
+                vulnerabilities.push({
+                    type: rule.type,
+                    message: rule.message,
+                    line: lineIndex + 1,
+                    column: match.index,
+                    severity: rule.severity,
+                    code: match[0],
+                    suggestion: rule.fix,
+                    fixAction: { title: rule.fix.split('\n')[0], replacement: rule.fix },
+                });
+            }
+        }
+
+        return vulnerabilities;
+    }
+
     // Fix suggestions for Java
     private getJavaFix(code: string): string {
         if (code.includes('executeQuery') || code.includes('createQuery')) {
@@ -1084,30 +1436,20 @@ export class SecurityScanner {
      * Remove duplicate vulnerabilities - same type on same line with overlapping positions
      */
     private removeDuplicates(vulnerabilities: SecurityVulnerability[]): SecurityVulnerability[] {
+        const seen = new Map<string, number>();
         const filtered: SecurityVulnerability[] = [];
 
         for (const vuln of vulnerabilities) {
-            // Check if there's already a similar vulnerability
-            const isDuplicate = filtered.some(existing => 
-                existing.line === vuln.line && 
-                existing.type === vuln.type &&
-                // Check for overlapping positions (within 10 characters)
-                Math.abs(existing.column - vuln.column) < 10
-            );
+            // Same type on the same line = duplicate regardless of column
+            const key = `${vuln.line}:${vuln.type}`;
+            const existingIndex = seen.get(key);
 
-            if (!isDuplicate) {
+            if (existingIndex === undefined) {
+                seen.set(key, filtered.length);
                 filtered.push(vuln);
-            } else {
-                // If duplicate but this one has better fix, replace it
-                const existingIndex = filtered.findIndex(existing => 
-                    existing.line === vuln.line && 
-                    existing.type === vuln.type &&
-                    Math.abs(existing.column - vuln.column) < 10
-                );
-                
-                if (existingIndex !== -1 && vuln.fixAction && !filtered[existingIndex].fixAction) {
-                    filtered[existingIndex] = vuln;
-                }
+            } else if (vuln.fixAction && !filtered[existingIndex].fixAction) {
+                // Keep whichever entry has a fix action
+                filtered[existingIndex] = vuln;
             }
         }
 
